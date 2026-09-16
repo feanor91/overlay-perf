@@ -264,3 +264,73 @@ async def test_surveillance_inactive_sans_tracker_ou_source(capsys, modifier):
     await _surveiller_source_fps(runtime, delai=999.0)  # ne doit jamais attendre
 
     assert capsys.readouterr().err == ""
+
+
+# --- Ctrl-C et fenetre d'appairage depuis l'icone de zone de notification --
+#
+# `QApplication.exec()` bloque l'interpreteur dans la boucle d'evenements native
+# de Qt : sans le correctif verifie ici, un signal SIGINT recu pendant que
+# l'overlay tourne ne fait tout simplement rien tant qu'aucun evenement Qt ne
+# rend la main a Python (au mieux avec un delai imprevisible, au pire jamais).
+
+
+def test_permettre_ctrl_c_installe_un_gestionnaire_qui_quitte_l_application():
+    pytest.importorskip("PySide6")
+    import os
+    import signal
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from overlay.cli import _permettre_ctrl_c
+
+    application = QApplication.instance() or QApplication([])
+    gestionnaire_original = signal.getsignal(signal.SIGINT)
+    appels: list = []
+    application.quit = lambda: appels.append(True)  # evite de vraiment arreter Qt
+    try:
+        veille = _permettre_ctrl_c(application)
+        assert veille.isActive()
+        signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+        assert appels == [True]
+    finally:
+        signal.signal(signal.SIGINT, gestionnaire_original)
+
+
+def test_dialogue_appairage_recoit_les_bonnes_adresses(monkeypatch):
+    pytest.importorskip("PySide6")
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from overlay import cli as cli_mod
+    from overlay.runtime import Runtime
+
+    QApplication.instance() or QApplication([])
+
+    captures: dict = {}
+
+    class _DialogueFactice:
+        def __init__(self, resume, matrice):
+            captures["resume"] = resume
+            captures["matrice"] = matrice
+
+        def exec(self):
+            captures["exec_appele"] = True
+
+    monkeypatch.setattr("overlay.overlay.tray.DialogueAppairage", _DialogueFactice)
+
+    config = Config()
+    config.server.port = 8777
+    runtime = Runtime(
+        config=config,
+        hub=None,
+        tracker=None,
+        frame_source=None,
+        token="jeton-abc",
+    )
+    cli_mod._ouvrir_dialogue_appairage(runtime)
+
+    assert captures["exec_appele"] is True
+    assert "jeton-abc" in captures["resume"]["primary_url"]

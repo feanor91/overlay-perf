@@ -134,6 +134,14 @@ click_through = true
 # Exemples : "<ctrl>+<alt>+o", "<shift>+<f10>", "<ctrl>+<shift>+m"
 hotkey = "<ctrl>+<alt>+o"
 
+# Raccourci global pour quitter proprement (complement de Ctrl-C au terminal).
+# Une valeur vide desactive le raccourci sans desactiver Ctrl-C.
+hotkey_quit = "<ctrl>+<alt>+q"
+
+# Icone de zone de notification : appairage du telephone et sortie sans
+# repasser par un terminal.
+tray_icon = true
+
 visible_at_start = true
 
 # Mesures affichees, dans l'ordre. Un « * » final agit comme un prefixe.

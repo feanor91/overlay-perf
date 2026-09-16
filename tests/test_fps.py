@@ -344,3 +344,37 @@ def test_mode_auto_avec_mangohud_disponible_ne_previent_pas(tracker, monkeypatch
     )
     assert isinstance(source, MangoHudSource)
     assert avertissements == []
+
+
+# --- Droits administrateur (Windows) ----------------------------------------
+#
+# PresentMon demarre sans la moindre erreur meme sans droits administrateur : il ne
+# transmet alors simplement jamais aucune trame. Rencontre en pratique comme cause de
+# FPS/1 % low restant vides alors que PresentMon est bien trouve.
+
+
+def test_presentmon_trouve_sans_droits_administrateur_avertit(tracker, monkeypatch):
+    monkeypatch.setattr("overlay.fps.sources.shutil.which", lambda _: "/usr/bin/PresentMon.exe")
+    monkeypatch.setattr("overlay.fps.sources._tourne_en_administrateur", lambda: False)
+    avertissements: list = []
+    source = build_frame_source(tracker, mode="auto", warnings=avertissements)
+    assert isinstance(source, PresentMonSource)  # la source reste utilisable telle quelle
+    assert len(avertissements) == 1
+    assert "administrateur" in avertissements[0]
+    assert "/usr/bin/PresentMon.exe" in avertissements[0]
+
+
+def test_presentmon_trouve_avec_droits_administrateur_ne_previent_pas(tracker, monkeypatch):
+    monkeypatch.setattr("overlay.fps.sources.shutil.which", lambda _: "/usr/bin/PresentMon.exe")
+    monkeypatch.setattr("overlay.fps.sources._tourne_en_administrateur", lambda: True)
+    avertissements: list = []
+    source = build_frame_source(tracker, mode="auto", warnings=avertissements)
+    assert isinstance(source, PresentMonSource)
+    assert avertissements == []
+
+
+def test_tourne_en_administrateur_toujours_vrai_hors_windows(monkeypatch):
+    from overlay.fps.sources import _tourne_en_administrateur
+
+    monkeypatch.setattr("overlay.fps.sources.sys.platform", "linux")
+    assert _tourne_en_administrateur() is True

@@ -5,7 +5,7 @@ from overlay.fps.tracker import FrameTimeTracker
 from overlay.hub import MetricsHub
 from overlay.server.app import create_app
 from overlay.server.auth import extract_token, token_matches
-from overlay.server.pairing import local_ip_addresses, pairing_url, render_qr
+from overlay.server.pairing import local_ip_addresses, pairing_url, qr_matrix, render_qr
 from tests.helpers import StaticBackend, reading
 
 JETON = "jeton-de-test"
@@ -228,3 +228,12 @@ def test_qr_code():
     lignes = rendu.splitlines()
     assert len(lignes) > 8
     assert all(len(ligne) == len(lignes[0]) for ligne in lignes)
+
+
+def test_qr_matrix_alimente_le_rendu_terminal():
+    """`render_qr` et l'icone de zone de notification partagent la meme grille."""
+    matrice = qr_matrix("http://192.168.1.2:8777/")
+    assert matrice is not None
+    assert len(matrice) > 8
+    assert all(len(ligne) == len(matrice[0]) for ligne in matrice)
+    assert all(isinstance(cellule, bool) for ligne in matrice for cellule in ligne)

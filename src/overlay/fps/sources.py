@@ -45,6 +45,16 @@ _PRESENTMON_INTROUVABLE = (
     "verifiez qu'il est sur le PATH (« presentmon --version » doit repondre)."
 )
 _MANGOHUD_INTROUVABLE = "Dossier de journaux MangoHud absent : {repertoire}"
+#: PresentMon demarre normalement sans droits administrateur, sans lever la moindre
+#: erreur, mais ne transmet alors jamais aucune trame : rencontre en pratique comme
+#: cause de FPS/1 % low restant a « — » alors que PresentMon est bien trouve et lance.
+_PAS_ADMINISTRATEUR = (
+    "PresentMon a ete trouve ({executable}) mais Overlay ne tourne pas en "
+    "administrateur : PresentMon va demarrer sans erreur visible, mais ne transmettra "
+    "jamais aucune trame (FPS, temps de trame et 1 % low resteront a « — »).\n"
+    "  Fermez Overlay, puis relancez votre terminal via un clic droit -> "
+    "« Executer en tant qu'administrateur »."
+)
 
 #: Colonnes de duree de trame, par ordre de preference (PresentMon v2 puis v1).
 _FRAME_TIME_COLUMNS = ("FrameTime", "msBetweenPresents", "msBetweenDisplayChange")
@@ -275,6 +285,23 @@ class MangoHudSource(FrameSource):
                 handle.close()
 
 
+def _tourne_en_administrateur() -> bool:
+    """True si le processus a les droits administrateur (toujours True hors Windows).
+
+    Verifie via l'API Win32 plutot que suppose : c'est la condition documentee par
+    PresentMon lui-meme pour s'abonner aux evenements ETW de presentation, et son
+    absence ne produit aucune erreur visible, seulement un flux de trames vide.
+    """
+    if sys.platform != "win32":
+        return True
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover - defensif, ne doit jamais bloquer le demarrage
+        return True
+
+
 def build_frame_source(
     tracker: FrameTimeTracker,
     *,
@@ -298,6 +325,10 @@ def build_frame_source(
     if mode in ("auto", "presentmon"):
         source = PresentMonSource(tracker, presentmon_path)
         if source.available():
+            if not _tourne_en_administrateur():
+                signaler(
+                    log, warnings, _PAS_ADMINISTRATEUR.format(executable=source.executable)
+                )
             return source
         if mode == "presentmon":
             signaler(log, warnings, _PRESENTMON_INTROUVABLE)

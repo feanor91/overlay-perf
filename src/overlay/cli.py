@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import signal
 import sys
 import threading
 from pathlib import Path
@@ -398,12 +399,48 @@ def _run_serveur_seul(runtime: Runtime) -> int:
     return 0
 
 
+def _ouvrir_dialogue_appairage(runtime: Runtime) -> None:
+    """Fenetre d'appairage ouverte depuis l'icone de zone de notification.
+
+    Meme information que « overlay pair » en console, mais accessible sans
+    terminal : c'est le but de l'icone.
+    """
+    from overlay.overlay.tray import DialogueAppairage
+    from overlay.server.pairing import pairing_summary, qr_matrix
+
+    resume = pairing_summary(
+        runtime.config.server.port,
+        runtime.token,
+        public_url=runtime.config.server.public_url,
+        scheme=_schema(runtime),
+    )
+    DialogueAppairage(resume, qr_matrix(str(resume["primary_url"]))).exec()
+
+
+def _permettre_ctrl_c(application):
+    """Sans ceci, Ctrl-C reste inoperant une fois entre dans `QApplication.exec()`.
+
+    La boucle d'evenements native de Qt bloque l'interpreteur Python dans du code
+    C++ qui ne rend jamais la main pour laisser Python traiter le signal SIGINT :
+    installer un gestionnaire ne suffit pas, il faut aussi reveiller
+    periodiquement l'interpreteur pour qu'il ait l'occasion de l'executer.
+    """
+    from PySide6.QtCore import QTimer
+
+    signal.signal(signal.SIGINT, lambda *_: application.quit())
+    veille = QTimer()
+    veille.timeout.connect(lambda: None)
+    veille.start(200)
+    return veille
+
+
 def _run_avec_overlay(runtime: Runtime, *, server: bool) -> int:
     """Qt occupe le thread principal ; le hub et le serveur vivent dans un thread asyncio."""
     try:
         from PySide6.QtWidgets import QApplication
 
         from overlay.overlay.hotkeys import HotkeyListener
+        from overlay.overlay.tray import creer_icone_systeme
         from overlay.overlay.window import OverlayWindow, creer_minuterie
     except ImportError as erreur:
         raise SystemExit(
@@ -467,11 +504,29 @@ def _run_avec_overlay(runtime: Runtime, *, server: bool) -> int:
     if raccourci_actif:
         print(f"Raccourci d'affichage : {runtime.config.overlay.hotkey}")
 
+    raccourci_sortie = HotkeyListener(runtime.config.overlay.hotkey_quit, application.quit)
+    if raccourci_sortie.start():
+        print(f"Raccourci de sortie : {runtime.config.overlay.hotkey_quit}")
+
+    plateau = None
+    if runtime.config.overlay.tray_icon:
+        plateau = creer_icone_systeme(
+            basculer_overlay=fenetre.basculement_demande.emit,
+            quitter=application.quit,
+            afficher_appairage=(lambda: _ouvrir_dialogue_appairage(runtime)) if server else None,
+        )
+
+    # La reference doit survivre jusqu'a application.exec() : voir _permettre_ctrl_c.
+    veille = _permettre_ctrl_c(application)  # noqa: F841
+
     try:
         code = application.exec()
-    except KeyboardInterrupt:  # pragma: no cover - interruption manuelle
+    except KeyboardInterrupt:  # pragma: no cover - filet de secours
         code = 0
     finally:
+        if plateau is not None:
+            plateau.hide()
+        raccourci_sortie.stop()
         raccourci.stop()
         serveur = conteneur.get("serveur")
         if serveur is not None:

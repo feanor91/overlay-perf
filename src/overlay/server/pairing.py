@@ -62,8 +62,12 @@ def with_token(base_url: str, token: str = "") -> str:
     return f"{base}#token={quote(token, safe='')}" if token else base
 
 
-def render_qr(text: str) -> str | None:
-    """QR code en caracteres semi-graphiques, ou `None` si `qrcode` est absent."""
+def qr_matrix(text: str) -> list[list[bool]] | None:
+    """Grille de modules noir/blanc du QR code, ou `None` si `qrcode` est absent.
+
+    Partagee entre le rendu terminal (`render_qr`) et l'icone de zone de
+    notification, qui la dessine elle-meme en pixels plutot qu'en demi-blocs.
+    """
     try:
         import qrcode
     except ImportError:
@@ -72,7 +76,14 @@ def render_qr(text: str) -> str | None:
     code = qrcode.QRCode(border=2)
     code.add_data(text)
     code.make(fit=True)
-    matrix = code.get_matrix()
+    return code.get_matrix()
+
+
+def render_qr(text: str) -> str | None:
+    """QR code en caracteres semi-graphiques, ou `None` si `qrcode` est absent."""
+    matrix = qr_matrix(text)
+    if matrix is None:
+        return None
 
     # Deux lignes du QR par ligne de terminal grace aux demi-blocs Unicode.
     lines: list[str] = []

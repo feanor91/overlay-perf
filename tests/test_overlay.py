@@ -169,3 +169,55 @@ def test_raccourci_sans_pynput(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", refuser)
     assert HotkeyListener("<ctrl>+<alt>+o", lambda: None).start() is False
+
+
+# --- Icone de zone de notification ------------------------------------------
+#
+# La plateforme de rendu "offscreen" utilisee par ces tests n'a pas de zone de
+# notification : QSystemTrayIcon.isSystemTrayAvailable() y repond toujours False.
+# C'est exactement le cas (bureau minimaliste sans zone de notification) que
+# `creer_icone_systeme` doit degrader en silence plutot que de faire planter
+# l'overlay : c'est ce que ces tests verifient reellement ici.
+
+
+def test_icone_systeme_absente_sans_zone_de_notification(application):
+    from overlay.overlay.tray import creer_icone_systeme
+
+    assert (
+        creer_icone_systeme(basculer_overlay=lambda: None, quitter=lambda: None) is None
+    )
+
+
+def test_rendu_pixel_du_qr_code(application):
+    from overlay.overlay.tray import _pixmap_qr
+
+    matrice = [[True, False], [False, True]]
+    pixmap = _pixmap_qr(matrice, echelle=5)
+    assert pixmap.width() == 10 and pixmap.height() == 10
+    assert not pixmap.isNull()
+
+
+def test_dialogue_appairage_sans_qrcode_affiche_l_astuce(application):
+    from PySide6.QtWidgets import QLabel
+
+    from overlay.overlay.tray import DialogueAppairage
+
+    resume = {"primary_url": "http://192.168.1.2:8777/#token=abc", "urls": [], "token": "abc"}
+    dialogue = DialogueAppairage(resume, None)
+    textes = [label.text() for label in dialogue.findChildren(QLabel)]
+    assert any("qrcode" in texte for texte in textes)
+    assert any("192.168.1.2:8777" in texte for texte in textes)
+    dialogue.deleteLater()
+
+
+def test_dialogue_appairage_avec_qrcode_affiche_l_image(application):
+    from overlay.overlay.tray import DialogueAppairage
+
+    resume = {
+        "primary_url": "http://192.168.1.2:8777/#token=abc",
+        "urls": ["http://192.168.1.2:8777/#token=abc"],
+        "token": "abc",
+    }
+    dialogue = DialogueAppairage(resume, [[True, False], [False, True]])
+    assert dialogue.windowTitle() == "Appairer un telephone"
+    dialogue.deleteLater()

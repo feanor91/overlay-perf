@@ -41,6 +41,14 @@ def test_le_modele_livre_est_valide():
     assert config.fps.mode == "auto"
 
 
+def test_raccourci_de_sortie_et_icone_actifs_par_defaut():
+    """Complement de Ctrl-C : un raccourci global pour quitter, sans terminal."""
+    config = Config()
+    assert config.overlay.hotkey_quit
+    assert config.overlay.hotkey_quit != config.overlay.hotkey
+    assert config.overlay.tray_icon is True
+
+
 def test_surcharge_partielle(tmp_path):
     config = load_config(
         ecrire(

@@ -115,6 +115,12 @@ class OverlayConfig:
     #: Laisse passer clics et mouvements de souris vers la fenetre situee dessous.
     click_through: bool = True
     hotkey: str = "<ctrl>+<alt>+o"
+    #: Raccourci global pour quitter proprement. Complement de Ctrl-C au terminal,
+    #: utile quand Overlay tourne sans console visible (raccourci, demarrage auto).
+    hotkey_quit: str = "<ctrl>+<alt>+q"
+    #: Icone de zone de notification : appairage du telephone et sortie sans
+    #: repasser par un terminal.
+    tray_icon: bool = True
     visible_at_start: bool = True
     metrics: list[str] = field(default_factory=lambda: list(DEFAULT_OVERLAY_METRICS))
 

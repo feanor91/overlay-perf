@@ -6,7 +6,9 @@ mobile compagnon.
 Affiche en temps reel les images par seconde, les temperatures, les charges CPU et
 GPU, la consommation electrique du processeur et de la carte graphique, la memoire
 et les vitesses de ventilateur — a l'ecran par-dessus le jeu, et sur le telephone. Chaque mesure peut etre montree ou masquee a la demande, et
-l'overlay entier s'ouvre et se ferme par un raccourci clavier.
+l'overlay entier s'ouvre et se ferme par un raccourci clavier. Une icone dans la
+zone de notification donne acces a l'appairage du telephone et permet de
+quitter sans repasser par un terminal ; Ctrl-C fonctionne aussi.
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -98,6 +100,23 @@ quand l'echelle a un sens et une courbe d'historique sinon. Le bouton **Mesures*
 ouvre la liste complete : decochez ce que vous ne voulez pas voir, le choix est
 conserve sur ce telephone. L'option « Garder l'ecran allume » evite la mise en
 veille pendant une session de jeu.
+
+**Avec l'overlay a l'ecran (`overlay run` ou `overlay overlay`), inutile de
+repasser par `overlay pair` dans un terminal** : une icone apparait dans la
+zone de notification des le demarrage, avec un menu « Appairer un
+telephone… » qui affiche la meme adresse et le meme QR code, en fenetre.
+Desactivable via `[overlay] tray_icon = false`.
+
+
+## Quitter proprement
+
+- **Ctrl-C** dans le terminal fonctionne, overlay affiche ou non.
+- **Un raccourci global** (`<ctrl>+<alt>+q` par defaut, configurable via
+  `[overlay] hotkey_quit`) quitte sans avoir a revenir au terminal.
+- **L'icone de zone de notification** propose « Quitter » dans son menu.
+
+Dans les trois cas, Overlay arrete proprement le serveur, la collecte et la
+source FPS avant de sortir.
 
 L'application retient **deux adresses** : celle du reseau local et, si vous en
 configurez une, celle joignable depuis l'exterieur. Elle essaie la locale en
@@ -244,6 +263,19 @@ absents.
 
 Passer `[fps] mode` a `"off"` desactive completement le suivi FPS, y compris cet
 avertissement.
+
+**Sous Windows, Overlay verifie aussi les droits administrateur des que
+PresentMon est trouve**, sans attendre 30 secondes ni un jeu lance : c'est la
+cause la plus frequente, en pratique, de FPS/1 % low restant vides alors que
+PresentMon est bien installe et bien identifie.
+
+```
+Attention : PresentMon a ete trouve (C:/.../PresentMon-2.3.1-x64.exe) mais Overlay
+ne tourne pas en administrateur : PresentMon va demarrer sans erreur visible, mais
+ne transmettra jamais aucune trame (FPS, temps de trame et 1 % low resteront a « — »).
+  Fermez Overlay, puis relancez votre terminal via un clic droit -> « Executer en
+  tant qu'administrateur ».
+```
 
 **Ce premier avertissement ne couvre que « rien trouve ».** Un executable trouve
 et lance avec succes (le processus demarre normalement) peut malgre tout ne
@@ -420,6 +452,8 @@ position = "top-left"      # ou top-right, bottom-left, bottom-right
 opacity = 0.85
 columns = 2                # repartir les lignes sur plusieurs colonnes
 hotkey = "<ctrl>+<alt>+o"  # raccourci global d'affichage
+hotkey_quit = "<ctrl>+<alt>+q"  # raccourci global pour quitter
+tray_icon = true           # icone de zone de notification (appairage, quitter)
 visible_at_start = true
 metrics = ["fps.current", "cpu.load", "cpu.power", "gpu.0.temp", "gpu.0.power", "fan.*"]
 
@@ -491,7 +525,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 280 tests
+python -m pytest -q                  # 291 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

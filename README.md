@@ -31,8 +31,14 @@ Python 3.10 ou plus recent.
 ```bash
 git clone https://github.com/feanor91/overlay-perf
 cd overlay-perf
+python -m venv .venv
+source .venv/bin/activate        # Linux/macOS ; sous Windows : .venv\Scripts\activate
 pip install ".[all]"
 ```
+
+Un environnement virtuel n'est pas strictement necessaire, mais evite un piege
+frequent sous Windows (voir ci-dessous) et empeche les dependances d'Overlay de se
+melanger a celles d'autres projets Python.
 
 Les extras se choisissent separement si besoin :
 
@@ -42,6 +48,18 @@ Les extras se choisissent separement si besoin :
 | `server` | FastAPI, uvicorn, qrcode | l'application mobile |
 | `overlay` | PySide6, pynput | l'affichage a l'ecran et le raccourci global |
 | `all` | les deux | l'usage courant |
+
+**Sous Windows, sans environnement virtuel**, `pip install` place `overlay.exe`
+dans `%APPDATA%\Python\PythonXY\Scripts` — un dossier absent du `PATH` par
+defaut. La commande `overlay` reste alors introuvable juste apres
+l'installation (`CommandNotFoundException` sous PowerShell), sans rien
+d'anormal a l'installation elle-meme. Deux solutions, sans rien reinstaller :
+
+- lancer `python -m overlay ...` a la place de `overlay ...` : fonctionne
+  toujours, meme sans venv, puisqu'il ne depend pas du `PATH` ;
+- ajouter ce dossier au `PATH` de l'utilisateur — son chemin exact est donne
+  par l'avertissement de pip au moment de l'installation — puis rouvrir le
+  terminal pour que le changement prenne effet.
 
 
 ## Demarrage rapide

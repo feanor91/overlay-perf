@@ -188,3 +188,79 @@ def test_commande_run_affiche_les_avertissements_de_detection(monkeypatch, capsy
 
     assert code == 0
     assert "Attention : LibreHardwareMonitor injoignable sur test" in capsys.readouterr().err
+
+
+# --- Surveillance de la source FPS apres demarrage --------------------------
+#
+# Un executable trouve et lance avec succes (le processus Python demarre sans
+# lever) peut ne jamais transmettre une seule trame utile — par exemple si le
+# nom recherche correspond en realite a un tout autre programme partageant le
+# meme nom de fichier (rencontre en pratique : « PresentMon.exe » designe a la
+# fois l'outil console attendu et l'application graphique PresentMon Capture).
+# Rien dans le cycle de vie du processus ne le signale de lui-meme.
+
+
+class _SourceFactice:
+    name = "presentmon"
+
+
+def _runtime_factice(tracker):
+    from overlay.hub import MetricsHub
+    from overlay.runtime import Runtime
+    from overlay.sensors.mock import MockBackend
+
+    return Runtime(
+        config=Config(),
+        hub=MetricsHub([MockBackend()], poll_interval=1.0),
+        tracker=tracker,
+        frame_source=_SourceFactice(),
+        token="jeton",
+    )
+
+
+async def test_surveillance_avertit_si_aucune_trame_recue(capsys):
+    from overlay.cli import _surveiller_source_fps
+    from overlay.fps.tracker import FrameTimeTracker
+
+    runtime = _runtime_factice(FrameTimeTracker(window_seconds=5.0))
+    await _surveiller_source_fps(runtime, delai=0.02)
+
+    erreur = capsys.readouterr().err
+    assert "Attention" in erreur
+    assert "presentmon" in erreur
+    # La cause la plus probable (rencontree en pratique) doit etre nommee, pas
+    # seulement "quelque chose ne va pas".
+    assert "PresentMon Capture" in erreur
+    assert "presentmon_path" in erreur
+    assert "administrateur" in erreur
+
+
+async def test_surveillance_silencieuse_si_des_trames_arrivent(capsys):
+    from overlay.cli import _surveiller_source_fps
+    from overlay.fps.tracker import FrameTimeTracker
+
+    tracker = FrameTimeTracker(window_seconds=5.0)
+    tracker.add_frame_time(16.0)
+    runtime = _runtime_factice(tracker)
+    await _surveiller_source_fps(runtime, delai=0.02)
+
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize(
+    "modifier",
+    [
+        lambda r: setattr(r, "tracker", None),
+        lambda r: setattr(r, "frame_source", None),
+    ],
+)
+async def test_surveillance_inactive_sans_tracker_ou_source(capsys, modifier):
+    """Mode fps "off" ou "push" : rien a surveiller, et surtout pas d'attente inutile."""
+    from overlay.cli import _surveiller_source_fps
+    from overlay.fps.tracker import FrameTimeTracker
+
+    runtime = _runtime_factice(FrameTimeTracker(window_seconds=5.0))
+    modifier(runtime)
+    await _surveiller_source_fps(runtime, delai=999.0)  # ne doit jamais attendre
+
+    assert capsys.readouterr().err == ""

@@ -197,6 +197,23 @@ Overlay ne s'injecte dans aucun jeu. Trois sources, selectionnees par
 | `auto` | toutes | PresentMon s'il est present, sinon MangoHud. |
 | `off` | toutes | Desactive la mesure du FPS. |
 
+**Attention au nom : deux outils differents s'appellent tous les deux
+`PresentMon.exe`.** Le depot [GameTechDev/PresentMon](https://github.com/GameTechDev/PresentMon)
+publie a la fois l'**outil console** attendu ici (le binaire de release porte un
+nom versionne, par exemple `PresentMon-2.3.1-x64.exe`) et une **application
+graphique** distincte, « PresentMon Capture » (fenetre avec reglages, hotkeys,
+auto-target), qui se lance elle sous le nom `PresentMon.exe` — exactement celui
+qu'Overlay recherche sur le `PATH`. Si les deux sont installees, Overlay peut
+trouver et lancer la mauvaise, qui ignore silencieusement les arguments qu'on lui
+passe et se contente d'ouvrir sa fenetre : aucune trame ne remonte jamais, sans
+la moindre erreur. Pour lever toute ambiguite, indiquez le chemin exact de
+l'outil console :
+
+```toml
+[fps]
+presentmon_path = "C:/Chemin/Vers/PresentMon-2.3.1-x64.exe"
+```
+
 Cote MangoHud, lancez le jeu en journalisant :
 
 ```bash
@@ -227,6 +244,31 @@ absents.
 
 Passer `[fps] mode` a `"off"` desactive completement le suivi FPS, y compris cet
 avertissement.
+
+**Ce premier avertissement ne couvre que « rien trouve ».** Un executable trouve
+et lance avec succes (le processus demarre normalement) peut malgre tout ne
+jamais transmettre une seule trame — le cas du piege de nommage ci-dessus, ou
+des droits administrateur manquants. Rien dans le cycle de vie du processus ne
+le signale de lui-meme : Overlay verifie donc, 30 secondes apres le demarrage,
+qu'une source trouvee a effectivement produit des trames. Si aucun jeu ne tourne
+encore a ce moment-la, c'est normal et le message le precise ; si un jeu tourne
+deja sans que rien ne remonte, il pointe directement vers les deux causes les
+plus frequentes :
+
+```
+Attention : Source FPS « presentmon » demarree, mais aucune trame recue apres 30 s.
+  Si aucun jeu n'est lance pour l'instant, c'est normal : rien a mesurer
+  encore, ce message n'indique rien d'anormal. Si un jeu tourne deja :
+  - « PresentMon.exe » designe deux outils differents publies par le meme
+    projet : l'outil console attendu ici, et l'application graphique
+    « PresentMon Capture » (fenetre avec reglages, hotkeys, auto-target)
+    qui porte le meme nom de fichier mais ne produit pas le meme flux.
+    Verifiez lequel est reellement installe sur le PATH, ou indiquez le
+    chemin exact du console dans [fps] presentmon_path pour lever toute
+    ambiguite (...) ;
+  - PresentMon a besoin des droits administrateur : relancez Overlay en
+    administrateur.
+```
 
 ### Temperatures, ventilateurs, charges
 
@@ -449,7 +491,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 276 tests
+python -m pytest -q                  # 280 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

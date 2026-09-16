@@ -335,14 +335,62 @@ def _annoncer_serveur(runtime: Runtime) -> None:
     _avertir_exposition(runtime)
 
 
+#: Delai avant de verifier qu'une source FPS trouvee et demarree produit bien des
+#: trames. Assez long pour ne jamais confondre "pas de jeu lance pour l'instant"
+#: (parfaitement normal juste apres le demarrage d'Overlay) avec une source
+#: reellement cassee.
+_DELAI_VERIFICATION_SOURCE_FPS = 30.0
+
+_SOURCE_FPS_SANS_TRAME = (
+    "Source FPS « {nom} » demarree, mais aucune trame recue apres {delai:.0f} s.\n"
+    "  Si aucun jeu n'est lance pour l'instant, c'est normal : rien a mesurer\n"
+    "  encore, ce message n'indique rien d'anormal. Si un jeu tourne deja :\n"
+    "  - « PresentMon.exe » designe deux outils differents publies par le meme\n"
+    "    projet : l'outil console attendu ici, et l'application graphique\n"
+    "    « PresentMon Capture » (fenetre avec reglages, hotkeys, auto-target)\n"
+    "    qui porte le meme nom de fichier mais ne produit pas le meme flux.\n"
+    "    Verifiez lequel est reellement installe sur le PATH, ou indiquez le\n"
+    "    chemin exact du console dans [fps] presentmon_path pour lever toute\n"
+    "    ambiguite (fichier telecharge sous un nom versionne, par exemple\n"
+    "    PresentMon-2.3.1-x64.exe, sur https://github.com/GameTechDev/PresentMon/releases) ;\n"
+    "  - PresentMon a besoin des droits administrateur : relancez Overlay en\n"
+    "    administrateur."
+)
+
+
+async def _surveiller_source_fps(
+    runtime: Runtime, *, delai: float = _DELAI_VERIFICATION_SOURCE_FPS
+) -> None:
+    """Verifie, un long moment apres le demarrage, qu'une source FPS trouvee
+    produit reellement des trames.
+
+    Un executable trouve et lance avec succes (au sens Python : le processus
+    demarre sans lever) peut ne jamais transmettre une seule trame utile — par
+    exemple si le nom recherche correspond en realite a un tout autre programme
+    partageant le meme nom de fichier. Rien dans le cycle de vie du processus ne
+    le signale : il demarre normalement, ne plante pas, ne produit simplement
+    jamais rien d'exploitable sur sa sortie standard. `start_frame_source()` ne
+    peut pas le detecter lui-meme : il ne sait que si le thread a demarre, pas si
+    des trames y transitent effectivement.
+    """
+    if runtime.tracker is None or runtime.frame_source is None:
+        return
+    await asyncio.sleep(delai)
+    if runtime.tracker.stats().frame_count == 0:
+        message = _SOURCE_FPS_SANS_TRAME.format(nom=runtime.frame_source.name, delai=delai)
+        print(f"\nAttention : {message}", file=sys.stderr)
+
+
 def _run_serveur_seul(runtime: Runtime) -> int:
     async def principal() -> None:
         serveur = _creer_serveur(runtime)
         await runtime.hub.start()
+        surveillance = asyncio.create_task(_surveiller_source_fps(runtime))
         _annoncer_serveur(runtime)
         try:
             await serveur.serve()
         finally:
+            surveillance.cancel()
             await runtime.hub.stop()
 
     with contextlib.suppress(KeyboardInterrupt):  # interruption manuelle (Ctrl-C)
@@ -370,6 +418,7 @@ def _run_avec_overlay(runtime: Runtime, *, server: bool) -> int:
         async def principal() -> None:
             await runtime.hub.start()
             conteneur["loop"] = asyncio.get_running_loop()
+            surveillance = asyncio.create_task(_surveiller_source_fps(runtime))
             serveur = _creer_serveur(runtime) if server else None
             conteneur["serveur"] = serveur
             boucle_prete.set()
@@ -379,6 +428,7 @@ def _run_avec_overlay(runtime: Runtime, *, server: bool) -> int:
                 else:
                     await asyncio.Event().wait()  # maintient la collecte en vie
             finally:
+                surveillance.cancel()
                 await runtime.hub.stop()
 
         try:

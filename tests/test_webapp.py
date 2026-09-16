@@ -25,6 +25,9 @@ def scenario(nom: str) -> dict:
         [NODE, str(SCENARIOS), nom],
         capture_output=True,
         text=True,
+        # Sans encodage explicite, Python decode avec celui du systeme : sous
+        # Windows (cp1252) les accents et le « · » de l'interface sont mutiles.
+        encoding="utf-8",
         timeout=30,
         check=False,
     )

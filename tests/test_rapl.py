@@ -1,11 +1,22 @@
-"""Consommation du processeur via powercap/RAPL."""
+"""Consommation du processeur via powercap/RAPL.
 
+Les domaines sysfs s'appellent `intel-rapl:0` : le deux-points est interdit dans
+un nom de fichier sous Windows, et ces tests reproduisent l'arborescence reelle.
+Comme le backend n'est de toute facon instancie que sous Linux, ils y sont limites.
+"""
+
+import sys
 import time
 
 import pytest
 
 from overmlay.models import Group, Kind
 from overmlay.sensors.linux_rapl import LinuxRaplBackend
+
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="arborescence sysfs Linux (noms de domaine contenant « : »)",
+)
 
 PLAGE = 262_143_328_850
 

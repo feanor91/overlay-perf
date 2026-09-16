@@ -95,6 +95,11 @@ trusted_proxies = "127.0.0.1"
 # tunnel termine deja le TLS, ce qui est le cas courant. Attention : un
 # certificat auto-signe empeche l'installation de l'application sur le telephone,
 # les navigateurs refusant les service workers hors origine sure et approuvee.
+#
+# Chemins Windows : en TOML, la barre inverse ouvre une sequence d'echappement,
+# et "C:\Users\moi\cert.pem" est refuse a la lecture du fichier. Ecrivez plutot
+# des barres obliques, que Windows accepte tout aussi bien :
+#   tls_cert = "C:/Users/moi/cert.pem"
 tls_cert = ""
 tls_key = ""
 

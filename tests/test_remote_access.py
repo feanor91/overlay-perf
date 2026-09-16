@@ -1,6 +1,7 @@
 """Acces a l'agent depuis un autre reseau : verrouillage, tunnel, appairage."""
 
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -189,8 +190,12 @@ def test_configurations_d_acces_distant_invalides(tmp_path, contenu, fragment):
 
 def test_certificat_tls_inexistant_refuse(tmp_path):
     chemin = tmp_path / "config.toml"
+    # Barres obliques : sous Windows, « C:\Users\... » dans une chaine TOML serait
+    # lu comme une sequence d'echappement. pathlib accepte les deux separateurs.
+    absent_cert = (tmp_path / "absent.pem").as_posix()
+    absent_cle = (tmp_path / "absent.key").as_posix()
     chemin.write_text(
-        f'[server]\ntls_cert = "{tmp_path / "absent.pem"}"\ntls_key = "{tmp_path / "absent.key"}"',
+        f'[server]\ntls_cert = "{absent_cert}"\ntls_key = "{absent_cle}"',
         encoding="utf-8",
     )
     with pytest.raises(ConfigError, match="fichier introuvable"):
@@ -203,8 +208,11 @@ def test_certificat_tls_present_accepte(tmp_path):
     cert.write_text("-----BEGIN CERTIFICATE-----", encoding="utf-8")
     cle.write_text("-----BEGIN PRIVATE KEY-----", encoding="utf-8")
     chemin = tmp_path / "config.toml"
-    chemin.write_text(f'[server]\ntls_cert = "{cert}"\ntls_key = "{cle}"', encoding="utf-8")
-    assert load_config(chemin).server.tls_cert == str(cert)
+    chemin.write_text(
+        f'[server]\ntls_cert = "{cert.as_posix()}"\ntls_key = "{cle.as_posix()}"',
+        encoding="utf-8",
+    )
+    assert Path(load_config(chemin).server.tls_cert) == cert
 
 
 # --- Appairage -------------------------------------------------------------

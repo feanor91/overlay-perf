@@ -225,8 +225,8 @@ class PsutilBackend(SensorBackend):
     # --- Entrees/sorties -----------------------------------------------------
 
     def _read_io(self) -> list[Reading]:
+        """Debits disque et reseau, deduits de la variation des compteurs cumulatifs."""
         now = time.monotonic()
-        readings: list[Reading] = []
         try:
             net = psutil.net_io_counters()
             disk = psutil.disk_io_counters()
@@ -235,31 +235,43 @@ class PsutilBackend(SensorBackend):
 
         net_now = (net.bytes_recv, net.bytes_sent) if net else None
         disk_now = (disk.read_bytes, disk.write_bytes) if disk else None
-        elapsed = now - self._last_time if self._last_time is not None else 0.0
 
-        if elapsed > 0:
-            if net_now and self._last_net:
-                readings.extend(
-                    self._rate_pair(
-                        "network",
-                        ("Reception", "Emission"),
-                        net_now,
-                        self._last_net,
-                        elapsed,
-                        Group.NETWORK,
-                    )
+        if self._last_time is None:
+            # Premier passage : on pose la reference, aucun debit calculable.
+            self._last_time, self._last_net, self._last_disk = now, net_now, disk_now
+            return []
+
+        elapsed = now - self._last_time
+        if elapsed <= 0:
+            # Deux relevés tombes sur le meme tic d'horloge. Sous Windows, avant
+            # Python 3.13, time.monotonic() avance par pas d'environ 15 ms :
+            # avancer la reference ici ferait disparaitre les debits a repetition.
+            # On la conserve pour mesurer sur la fenetre du cycle suivant.
+            return []
+
+        readings: list[Reading] = []
+        if net_now and self._last_net:
+            readings.extend(
+                self._rate_pair(
+                    "network",
+                    ("Reception", "Emission"),
+                    net_now,
+                    self._last_net,
+                    elapsed,
+                    Group.NETWORK,
                 )
-            if disk_now and self._last_disk:
-                readings.extend(
-                    self._rate_pair(
-                        "storage",
-                        ("Lecture disque", "Ecriture disque"),
-                        disk_now,
-                        self._last_disk,
-                        elapsed,
-                        Group.STORAGE,
-                    )
+            )
+        if disk_now and self._last_disk:
+            readings.extend(
+                self._rate_pair(
+                    "storage",
+                    ("Lecture disque", "Ecriture disque"),
+                    disk_now,
+                    self._last_disk,
+                    elapsed,
+                    Group.STORAGE,
                 )
+            )
 
         self._last_time = now
         self._last_net = net_now

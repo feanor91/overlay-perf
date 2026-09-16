@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from overmlay.hub import merge_readings
@@ -393,7 +395,10 @@ def test_pas_de_doublon_entre_amdgpu_et_hwmon(tmp_path):
     # Le repertoire global n'expose que des liens vers les peripheriques reels.
     classe = tmp_path / "hwmon"
     classe.mkdir()
-    (classe / "hwmon2").symlink_to(hwmon_carte, target_is_directory=True)
+    try:
+        (classe / "hwmon2").symlink_to(hwmon_carte, target_is_directory=True)
+    except OSError:  # Windows sans mode developpeur ni droits administrateur
+        pytest.skip("creation de lien symbolique non autorisee sur cette plateforme")
     carte_mere = classe / "hwmon0"
     carte_mere.mkdir()
     (carte_mere / "name").write_text("coretemp")
@@ -431,6 +436,29 @@ def test_backend_psutil_produit_les_mesures_de_base():
 def test_les_debits_exigent_deux_lectures():
     backend = PsutilBackend(include_io=True, include_thermals=False)
     assert not any(r.key.startswith("network.") for r in backend.read())
+    # L'horloge doit avoir avance : sous Windows, avant Python 3.13, elle progresse
+    # par pas d'environ 15 ms et deux appels consecutifs tombent sur le meme tic.
+    time.sleep(0.05)
+    assert any(r.key.startswith("network.") for r in backend.read())
+
+
+def test_une_horloge_grossiere_ne_fait_pas_disparaitre_les_debits(monkeypatch):
+    """La reference ne doit pas etre avancee tant qu'aucun temps ne s'est ecoule.
+
+    Sinon, sur une horloge a faible resolution, chaque relevé repousserait la
+    reference et les debits ne seraient jamais calcules.
+    """
+    instant = [1000.0]
+    monkeypatch.setattr(
+        "overmlay.sensors.psutil_backend.time.monotonic", lambda: instant[0]
+    )
+    backend = PsutilBackend(include_io=True, include_thermals=False)
+    backend.read()  # pose la reference
+
+    for _ in range(5):
+        assert not any(r.key.startswith("network.") for r in backend.read())
+
+    instant[0] += 0.0156  # un tic d'horloge Windows
     assert any(r.key.startswith("network.") for r in backend.read())
 
 

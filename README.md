@@ -359,7 +359,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 236 tests
+python -m pytest -q                  # 237 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 ```

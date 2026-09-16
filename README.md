@@ -3,8 +3,8 @@
 Overlay de monitoring materiel pour le PC, avec une application mobile compagnon.
 
 Affiche en temps reel les images par seconde, les temperatures, les charges CPU et
-GPU, la memoire et les vitesses de ventilateur — a l'ecran par-dessus le jeu, et
-sur le telephone. Chaque mesure peut etre montree ou masquee a la demande, et
+GPU, la consommation electrique de la carte graphique, la memoire et les vitesses
+de ventilateur — a l'ecran par-dessus le jeu, et sur le telephone. Chaque mesure peut etre montree ou masquee a la demande, et
 l'overlay entier s'ouvre et se ferme par un raccourci clavier.
 
 ```
@@ -115,10 +115,10 @@ fausser durablement ces centiles.
 
 | Plateforme | Source | Couverture |
 | --- | --- | --- |
-| Linux | `/sys/class/hwmon` | temperatures CPU/GPU/NVMe, vitesses de rotation, rapport PWM, puissances |
-| Linux | sysfs `amdgpu` | occupation GPU et VRAM des cartes AMD |
-| Windows | LibreHardwareMonitor | temperatures, ventilateurs, puissances, frequences |
-| Toutes | NVML / `nvidia-smi` | GPU NVIDIA : charge, temperature, VRAM, ventilateur, puissance, frequences |
+| Linux | `/sys/class/hwmon` | temperatures CPU/NVMe, vitesses de rotation, rapport PWM, puissances |
+| Linux | sysfs `amdgpu` | GPU AMD : charge, VRAM, temperature, ventilateur, **consommation** |
+| Windows | LibreHardwareMonitor | temperatures, ventilateurs, consommations, frequences |
+| Toutes | NVML / `nvidia-smi` | GPU NVIDIA : charge, temperature, VRAM, ventilateur, **consommation**, frequences |
 | Toutes | psutil | charge CPU (globale ou par coeur), frequence, RAM, swap, debits disque et reseau |
 
 **Sous Windows, une etape manuelle est indispensable.** Le systeme n'expose aucune
@@ -129,9 +129,21 @@ Overmlay interroge alors son serveur interne sur `http://127.0.0.1:8085/data.jso
 Sans lui, vous aurez la charge CPU, la memoire et le GPU NVIDIA, mais ni les
 temperatures de la carte mere ni les vitesses de ventilateur.
 
-Quand plusieurs sources publient la meme cle, la plus precise l'emporte : NVML
-prime sur hwmon pour `gpu.0.temp`, et les temperatures psutil sont automatiquement
-desactivees des qu'une source dediee est disponible.
+**La consommation de la carte graphique** sort sous la meme cle `gpu.N.power`
+chez NVIDIA et chez AMD, avec la limite de la carte (`power limit` / `power1_cap`)
+comme pleine echelle de la jauge. Une seule ligne de configuration couvre donc les
+deux fabricants. Il en va de meme pour `gpu.N.load`, `gpu.N.temp`, `gpu.N.fan` et
+`gpu.N.vram.used`. Seule exception : un GPU AMD **sous Windows** passe par
+LibreHardwareMonitor et garde des cles `lhm.*` propres a la machine, que
+`overmlay sensors` vous donnera.
+
+Quand plusieurs sources publient la meme cle, la plus precise l'emporte, et les
+temperatures psutil sont automatiquement desactivees des qu'une source dediee est
+disponible. Sous Linux, le sous-repertoire hwmon d'une carte AMD est lu par le
+backend `amdgpu` puis ignore par le backend hwmon generique : sa consommation
+n'apparait donc qu'une fois. Sur une machine hybride, les cartes AMD sont
+numerotees a la suite des cartes NVIDIA, pour que les deux ne se disputent pas
+`gpu.0`.
 
 `overmlay sensors` liste les cles reellement disponibles sur votre machine ; ce
 sont elles qu'on met dans `[overlay] metrics`.
@@ -164,7 +176,7 @@ opacity = 0.85
 columns = 2                # repartir les lignes sur plusieurs colonnes
 hotkey = "<ctrl>+<alt>+o"  # raccourci global d'affichage
 visible_at_start = true
-metrics = ["fps.current", "cpu.load", "gpu.0.temp", "fan.*"]
+metrics = ["fps.current", "cpu.load", "gpu.0.temp", "gpu.0.power", "fan.*"]
 
 [server]
 host = "0.0.0.0"           # 127.0.0.1 pour interdire l'acces reseau
@@ -232,7 +244,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 172 tests
+python -m pytest -q                  # 182 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 ```

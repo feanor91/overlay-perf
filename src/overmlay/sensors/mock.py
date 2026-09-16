@@ -43,7 +43,7 @@ class MockBackend(SensorBackend):
              Group.GPU, Kind.TEMPERATURE, None, 90.0),
             ("gpu.0.fan", "GPU ventilateur", 25 + gpu_load * 0.5, "%",
              Group.GPU, Kind.LOAD, 0.0, 100.0),
-            ("gpu.0.power", "GPU puissance", 60 + gpu_load * 1.6, "W",
+            ("gpu.0.power", "GPU consommation", 60 + gpu_load * 1.6, "W",
              Group.GPU, Kind.POWER, 0.0, 250.0),
             ("gpu.0.vram.used", "GPU VRAM", self._wave(6000, 1800, 2.0), "MiB",
              Group.GPU, Kind.MEMORY, 0.0, 12282.0),

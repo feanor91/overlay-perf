@@ -48,14 +48,23 @@ def detect_backends(
     candidates: list[SensorBackend] = []
     thermal_source = False
 
+    nvidia = NvidiaBackend()
+    nvidia_actif = "nvidia" not in disabled and nvidia.available()
+
     if sys.platform.startswith("linux"):
-        hwmon = LinuxHwmonBackend()
+        # Les cartes AMD sont numerotees a la suite des cartes NVIDIA : sur une
+        # machine hybride, les deux revendiqueraient sinon la cle `gpu.0`.
+        amd = AmdGpuBackend(index_offset=nvidia.device_count() if nvidia_actif else 0)
+        exclusions: set = set()
+        if "amdgpu" not in disabled and amd.available():
+            candidates.append(amd)
+            # Temperature, consommation et ventilateur du GPU AMD sont deja publies
+            # ci-dessus sous `gpu.N.*` : hwmon ne doit pas les republier.
+            exclusions = amd.hwmon_devices()
+        hwmon = LinuxHwmonBackend(exclude=exclusions)
         if "hwmon" not in disabled and hwmon.available():
             candidates.append(hwmon)
             thermal_source = True
-        amd = AmdGpuBackend()
-        if "amdgpu" not in disabled and amd.available():
-            candidates.append(amd)
     elif sys.platform == "win32":
         lhm = LibreHardwareMonitorBackend(lhm_url) if lhm_url else LibreHardwareMonitorBackend()
         if "lhm" not in disabled and lhm.available():
@@ -69,8 +78,7 @@ def detect_backends(
                 lhm.url,
             )
 
-    nvidia = NvidiaBackend()
-    if "nvidia" not in disabled and nvidia.available():
+    if nvidia_actif:
         candidates.append(nvidia)
 
     if "psutil" not in disabled:

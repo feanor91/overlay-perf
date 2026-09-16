@@ -51,15 +51,39 @@ class LinuxHwmonBackend(SensorBackend):
     name = "hwmon"
     description = "Sondes materielles Linux (/sys/class/hwmon) : temperatures, ventilateurs, PWM"
 
-    def __init__(self, root: Path | str = HWMON_ROOT) -> None:
+    def __init__(
+        self,
+        root: Path | str = HWMON_ROOT,
+        *,
+        exclude: set[Path] | frozenset[Path] | None = None,
+    ) -> None:
         self.root = Path(root)
+        # Peripheriques deja couverts par un backend dedie (le sous-repertoire
+        # hwmon d'un GPU AMD, par exemple) : les relire ici publierait la meme
+        # sonde une seconde fois sous un autre nom.
+        self.exclude = {Path(p) for p in (exclude or ())}
 
     def available(self) -> bool:
         return self.root.is_dir() and any(self.root.iterdir())
 
+    def _excluded(self, device: Path) -> bool:
+        if not self.exclude:
+            return False
+        try:
+            resolved = device.resolve()
+        except OSError:  # pragma: no cover - lien symbolique casse
+            return False
+        return resolved in self.exclude
+
     def read(self) -> list[Reading]:
         readings: list[Reading] = []
-        for device in sorted(self.root.iterdir()):
+        try:
+            devices = sorted(self.root.iterdir())
+        except OSError:
+            return []
+        for device in devices:
+            if self._excluded(device):
+                continue
             readings.extend(self._read_device(device))
         return readings
 

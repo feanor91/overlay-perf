@@ -22,6 +22,16 @@ def test_fichier_absent_donne_les_valeurs_par_defaut(tmp_path):
     assert tuple(config.overlay.metrics) == DEFAULT_OVERLAY_METRICS
 
 
+def test_la_consommation_gpu_est_affichee_par_defaut():
+    """La cle est commune a NVIDIA et AMD : une seule entree couvre les deux."""
+    assert "gpu.0.power" in DEFAULT_OVERLAY_METRICS
+    assert "gpu.0.power" in Config().overlay.metrics
+
+    from overmlay.cli import EXEMPLE_CONFIG
+
+    assert "gpu.0.power" in load_config(EXEMPLE_CONFIG).overlay.metrics
+
+
 def test_le_modele_livre_est_valide():
     from overmlay.cli import EXEMPLE_CONFIG
 

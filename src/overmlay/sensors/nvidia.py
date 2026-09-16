@@ -63,6 +63,21 @@ class NvidiaBackend(SensorBackend):
     def available(self) -> bool:
         return self._nvml is not None or self._smi is not None
 
+    def device_count(self) -> int:
+        """Nombre de GPU NVIDIA presents.
+
+        Sert a decaler l'index des cartes AMD sur une machine hybride, pour que
+        deux GPU ne se disputent pas la cle `gpu.0`.
+        """
+        if not self.available():
+            return 0
+        if self._nvml is not None:
+            try:
+                return int(self._nvml.nvmlDeviceGetCount())
+            except Exception:  # pragma: no cover - depend du pilote
+                return 0
+        return len(self._read_smi())
+
     def close(self) -> None:
         if self._nvml is not None:
             with contextlib.suppress(Exception):  # pragma: no cover - depend du pilote
@@ -171,7 +186,7 @@ class NvidiaBackend(SensorBackend):
              Kind.MEMORY, 0.0, vram_total),
             (f"{prefix}.vram.load", f"GPU {index} bus memoire", row.get("utilization.memory"), "%",
              Kind.LOAD, 0.0, 100.0),
-            (f"{prefix}.power", f"GPU {index} puissance", row.get("power.draw"), "W",
+            (f"{prefix}.power", f"GPU {index} consommation", row.get("power.draw"), "W",
              Kind.POWER, 0.0, power_limit),
             (f"{prefix}.clock.core", f"GPU {index} frequence", row.get("clocks.current.graphics"),
              "MHz", Kind.FREQUENCY, 0.0, None),

@@ -1,5 +1,6 @@
 import pytest
 
+from overmlay.hub import merge_readings
 from overmlay.models import Group, Kind
 from overmlay.sensors import detect_backends
 from overmlay.sensors.amdgpu import AmdGpuBackend
@@ -148,6 +149,19 @@ def test_mesures_nvidia_omettent_les_champs_non_supportes():
     assert "gpu.1.fan" not in cles       # ventilateur absent sur cette carte
 
 
+def test_consommation_nvidia():
+    ligne = parse_smi_csv(
+        "0, RTX 4070, 54, 37, 12, 2048, 12282, 41, 78.55, 200.00, 1920, 10501"
+    )[0]
+    backend = NvidiaBackend.__new__(NvidiaBackend)
+    consommation = next(r for r in backend._to_readings(ligne) if r.key == "gpu.0.power")
+    assert consommation.value == 78.5
+    assert consommation.unit == "W"
+    assert consommation.kind is Kind.POWER
+    # La limite de la carte donne la pleine echelle de la jauge.
+    assert consommation.range == (0.0, 200.0)
+
+
 def test_vram_bornee_par_la_capacite_de_la_carte():
     ligne = parse_smi_csv(
         "0, RTX 4070, 54, 37, 12, 2048, 12282, 41, 78.55, 200.00, 1920, 10501"
@@ -256,26 +270,152 @@ def test_arbre_lhm_vide():
 # --- amdgpu ----------------------------------------------------------------
 
 
-def test_lecture_amdgpu(tmp_path):
+@pytest.fixture
+def faux_amdgpu(tmp_path):
     device = tmp_path / "card0" / "device"
     device.mkdir(parents=True)
     (device / "gpu_busy_percent").write_text("73")
+    (device / "mem_busy_percent").write_text("41")
     (device / "mem_info_vram_used").write_text(str(6 * 1024 * 1024 * 1024))
     (device / "mem_info_vram_total").write_text(str(16 * 1024 * 1024 * 1024))
+    (device / "product_name").write_text("Radeon RX 7800 XT")
+
+    hwmon = device / "hwmon" / "hwmon4"
+    hwmon.mkdir(parents=True)
+    (hwmon / "name").write_text("amdgpu")
+    (hwmon / "power1_average").write_text("187000000")  # 187 W
+    (hwmon / "power1_cap").write_text("263000000")
+    (hwmon / "temp1_input").write_text("64000")
+    (hwmon / "temp1_label").write_text("edge")
+    (hwmon / "temp2_input").write_text("78000")
+    (hwmon / "temp2_label").write_text("junction")
+    (hwmon / "pwm1").write_text("140")
+    (hwmon / "fan1_input").write_text("1620")
+
     # Un connecteur d'affichage ne doit pas etre pris pour une carte.
     (tmp_path / "card0-DP-1").mkdir()
+    return tmp_path
 
-    backend = AmdGpuBackend(tmp_path)
+
+def test_lecture_amdgpu(faux_amdgpu):
+    backend = AmdGpuBackend(faux_amdgpu)
     assert backend.available()
     mesures = {r.key: r for r in backend.read()}
     assert mesures["gpu.0.load"].value == 73.0
+    assert mesures["gpu.0.vram.load"].value == 41.0
     assert mesures["gpu.0.vram.used"].value == 6144.0
     assert mesures["gpu.0.vram.used"].range == (0.0, 16384.0)
+
+
+def test_consommation_amdgpu(faux_amdgpu):
+    """La cle est la meme que chez NVIDIA : une seule ligne de configuration suffit."""
+    consommation = {r.key: r for r in AmdGpuBackend(faux_amdgpu).read()}["gpu.0.power"]
+    assert consommation.value == 187.0
+    assert consommation.unit == "W"
+    assert consommation.kind is Kind.POWER
+    assert consommation.group is Group.GPU
+    assert consommation.range == (0.0, 263.0)  # power1_cap sert de pleine echelle
+    assert consommation.to_dict()["gauge"] is True
+
+
+def test_consommation_amdgpu_depuis_power1_input(tmp_path):
+    """Les cartes recentes exposent `power1_input` la ou les anciennes moyennaient."""
+    hwmon = tmp_path / "card0" / "device" / "hwmon" / "hwmon0"
+    hwmon.mkdir(parents=True)
+    (tmp_path / "card0" / "device" / "gpu_busy_percent").write_text("10")
+    (hwmon / "power1_input").write_text("95500000")
+    mesures = {r.key: r for r in AmdGpuBackend(tmp_path).read()}
+    assert mesures["gpu.0.power"].value == 95.5
+
+
+def test_amdgpu_sans_capteur_de_consommation(tmp_path):
+    device = tmp_path / "card0" / "device"
+    device.mkdir(parents=True)
+    (device / "gpu_busy_percent").write_text("10")
+    mesures = {r.key for r in AmdGpuBackend(tmp_path).read()}
+    assert mesures == {"gpu.0.load"}  # aucune cle inventee faute de sonde
+
+
+def test_sondes_thermiques_amdgpu(faux_amdgpu):
+    mesures = {r.key: r for r in AmdGpuBackend(faux_amdgpu).read()}
+    # « edge » est la temperature GPU au sens courant : elle prend la cle courte.
+    assert mesures["gpu.0.temp"].value == 64.0
+    assert mesures["gpu.0.temp.junction"].value == 78.0
+    # `gpu.N.fan` est un pourcentage chez NVIDIA : AMD s'aligne sur le PWM.
+    assert mesures["gpu.0.fan"].unit == "%"
+    assert mesures["gpu.0.fan"].value == pytest.approx(54.9, abs=0.1)
+    assert mesures["gpu.0.fan.rpm"].value == 1620.0
+
+
+def test_decalage_d_index_sur_machine_hybride(faux_amdgpu):
+    """Avec un GPU NVIDIA en `gpu.0`, la carte AMD prend `gpu.1`."""
+    mesures = {r.key for r in AmdGpuBackend(faux_amdgpu, index_offset=1).read()}
+    assert "gpu.1.power" in mesures
+    assert not any(cle.startswith("gpu.0.") for cle in mesures)
+
+
+def test_hwmon_du_gpu_signale_pour_exclusion(faux_amdgpu):
+    devices = AmdGpuBackend(faux_amdgpu).hwmon_devices()
+    assert {p.name for p in devices} == {"hwmon4"}
+
+
+def test_hwmon_ignore_les_peripheriques_exclus(faux_hwmon):
+    """Sans exclusion, la sonde du GPU serait publiee deux fois sous deux noms."""
+    complet = {r.key for r in LinuxHwmonBackend(faux_hwmon).read()}
+    assert any(cle.startswith("temp.amdgpu") for cle in complet)
+
+    exclu = {
+        r.key
+        for r in LinuxHwmonBackend(
+            faux_hwmon, exclude={(faux_hwmon / "hwmon2").resolve()}
+        ).read()
+    }
+    assert not any(cle.startswith("temp.amdgpu") for cle in exclu)
+    assert "temp.coretemp.package_id_0" in exclu  # les autres puces restent lues
+
+
+def test_pas_de_doublon_entre_amdgpu_et_hwmon(tmp_path):
+    """Reproduit le sysfs reel : /sys/class/hwmon pointe vers le hwmon de la carte.
+
+    Sans exclusion, la consommation du GPU remonterait deux fois — une fois en
+    `gpu.0.power`, une fois en `power.amdgpu.1` — sous deux intitules differents.
+    """
+    drm = tmp_path / "drm"
+    device = drm / "card0" / "device"
+    hwmon_carte = device / "hwmon" / "hwmon4"
+    hwmon_carte.mkdir(parents=True)
+    (device / "gpu_busy_percent").write_text("73")
+    (hwmon_carte / "name").write_text("amdgpu")
+    (hwmon_carte / "power1_average").write_text("187000000")
+    (hwmon_carte / "temp1_input").write_text("64000")
+    (hwmon_carte / "temp1_label").write_text("edge")
+
+    # Le repertoire global n'expose que des liens vers les peripheriques reels.
+    classe = tmp_path / "hwmon"
+    classe.mkdir()
+    (classe / "hwmon2").symlink_to(hwmon_carte, target_is_directory=True)
+    carte_mere = classe / "hwmon0"
+    carte_mere.mkdir()
+    (carte_mere / "name").write_text("coretemp")
+    (carte_mere / "temp1_input").write_text("45000")
+
+    amd = AmdGpuBackend(drm)
+    hwmon = LinuxHwmonBackend(classe, exclude=amd.hwmon_devices())
+    mesures = merge_readings([amd.safe_read(), hwmon.safe_read()])
+    cles = [r.key for r in mesures]
+
+    assert len(cles) == len(set(cles))
+    assert "gpu.0.power" in cles
+    assert not any(cle.startswith("power.amdgpu") for cle in cles)
+    assert not any(cle.startswith("temp.amdgpu") for cle in cles)
+    # La carte mere, elle, est toujours lue.
+    assert "temp.coretemp.coretemp_temp1" in cles
 
 
 def test_amdgpu_absent(tmp_path):
     assert not AmdGpuBackend(tmp_path).available()
     assert AmdGpuBackend(tmp_path).read() == []
+    assert AmdGpuBackend(tmp_path).hwmon_devices() == set()
 
 
 # --- psutil et detection ---------------------------------------------------

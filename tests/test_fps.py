@@ -272,6 +272,29 @@ def test_presentmon_absent_du_path(tracker, monkeypatch):
     assert not PresentMonSource(tracker).available()
 
 
+def test_presentmon_introuvable_au_lancement_avertit_sans_lever(tracker, monkeypatch, capsys):
+    """Rencontre en pratique : le chemin resolu (PATH ou presentmon_path) n'existe
+
+    plus au moment de lancer le processus (deplace, mal recopie, extraction
+    incomplete). `subprocess.Popen` leve alors FileNotFoundError (WinError 2 sous
+    Windows) : sans ce correctif, seule une trace Python brute atteignait
+    l'utilisateur, sans jamais dire quel chemin avait ete essaye.
+    """
+
+    def popen_factice(*args, **kwargs):
+        raise FileNotFoundError(2, "Le fichier specifie est introuvable")
+
+    monkeypatch.setattr("overlay.fps.sources.subprocess.Popen", popen_factice)
+    source = PresentMonSource(tracker, "C:/chemin/errone/PresentMon-2.3.1-x64.exe")
+
+    source._run()  # ne doit pas lever
+
+    erreur = capsys.readouterr().err
+    assert "Attention" in erreur
+    assert "PresentMon-2.3.1-x64.exe" in erreur
+    assert "presentmon_path" in erreur
+
+
 # --- Avertissements quand aucune source de trames n'est trouvee ------------
 #
 # En mode "auto" (le defaut), l'absence de PresentMon comme de MangoHud ne

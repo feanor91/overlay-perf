@@ -55,6 +55,18 @@ _PAS_ADMINISTRATEUR = (
     "  Fermez Overlay, puis relancez votre terminal via un clic droit -> "
     "« Executer en tant qu'administrateur »."
 )
+#: `shutil.which` (auto) ou `presentmon_path` (explicite) peuvent tous deux designer
+#: un chemin qui n'existe plus au moment ou on l'execute vraiment : fichier deplace,
+#: mal recopie, extraction incomplete, lettre en trop dans la config. Sans ce message,
+#: seule une trace Python brute (FileNotFoundError, WinError 2) atteignait l'utilisateur,
+#: sans jamais dire quel chemin avait ete essaye.
+_EXECUTABLE_INTROUVABLE_A_L_EXECUTION = (
+    "PresentMon introuvable au moment de le lancer : {executable}\n"
+    "  Ce chemin n'existe pas ou n'est pas accessible (faute de frappe, dossier "
+    "deplace, extraction incomplete). Verifiez-le, notamment dans [fps] "
+    "presentmon_path si vous l'avez renseigne, ou videz ce reglage pour rechercher "
+    "automatiquement sur le PATH."
+)
 
 #: Colonnes de duree de trame, par ordre de preference (PresentMon v2 puis v1).
 _FRAME_TIME_COLUMNS = ("FrameTime", "msBetweenPresents", "msBetweenDisplayChange")
@@ -182,13 +194,19 @@ class PresentMonSource(FrameSource):
             "--stop_existing_session",
             "--no_top",
         ]
-        self._process = subprocess.Popen(  # noqa: S603 - binaire resolu via shutil.which
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            bufsize=1,
-        )
+        try:
+            self._process = subprocess.Popen(  # noqa: S603 - binaire resolu via shutil.which
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                bufsize=1,
+            )
+        except FileNotFoundError:
+            message = _EXECUTABLE_INTROUVABLE_A_L_EXECUTION.format(executable=self.executable)
+            log.warning(message)
+            print(f"\nAttention : {message}", file=sys.stderr)
+            return
         if self._process.stdout is None:  # pragma: no cover - defensif
             return
         consume_presentmon_csv(self._process.stdout, self.tracker, self._stop.is_set)

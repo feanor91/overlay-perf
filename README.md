@@ -234,6 +234,17 @@ l'outil console :
 presentmon_path = "C:/Chemin/Vers/PresentMon-2.3.1-x64.exe"
 ```
 
+**Si ce chemin est errone (faute de frappe, dossier deplace, extraction
+incomplete), Overlay le signale clairement au lieu de laisser passer une
+trace Python brute :**
+
+```
+Attention : PresentMon introuvable au moment de le lancer : C:/Chemin/Vers/PresentMon-2.3.1-x64.exe
+  Ce chemin n'existe pas ou n'est pas accessible (faute de frappe, dossier deplace,
+  extraction incomplete). Verifiez-le, notamment dans [fps] presentmon_path si vous
+  l'avez renseigne, ou videz ce reglage pour rechercher automatiquement sur le PATH.
+```
+
 Cote MangoHud, lancez le jeu en journalisant :
 
 ```bash
@@ -526,7 +537,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 292 tests
+python -m pytest -q                  # 293 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

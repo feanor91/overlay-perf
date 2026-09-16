@@ -80,8 +80,87 @@ ouvre la liste complete : decochez ce que vous ne voulez pas voir, le choix est
 conserve sur ce telephone. L'option « Garder l'ecran allume » evite la mise en
 veille pendant une session de jeu.
 
+L'application retient **deux adresses** : celle du reseau local et, si vous en
+configurez une, celle joignable depuis l'exterieur. Elle essaie la locale en
+premier — sur place, elle evite le detour par Internet — puis bascule sur la
+distante en une seconde si elle ne repond pas. L'etat affiche laquelle est en
+service (« En direct · local » ou « En direct · distant »).
+
 La connexion se retablit toute seule apres une coupure Wi-Fi ou une sortie de
 veille, avec un recul exponentiel pour ne pas marteler l'agent.
+
+
+## Acces depuis un autre reseau
+
+Par defaut, l'agent n'est joignable que sur le reseau local. Pour consulter ses
+mesures depuis l'exterieur, il faut le rendre accessible — et c'est la que se joue
+la securite de l'installation, puisque le jeton donne acces a l'etat detaille de la
+machine.
+
+**La bonne approche n'est pas d'ouvrir un port sur la box.** Un port ouvert est
+balaye par des robots en quelques heures, votre adresse IP change, et beaucoup
+d'abonnements passent par du CGNAT ou la redirection de port ne fonctionne meme
+pas. Un tunnel sortant evite les trois problemes a la fois et apporte un
+certificat HTTPS valide, sans lequel le telephone refuse d'installer
+l'application.
+
+### Tailscale — recommande
+
+Le telephone et le PC rejoignent un reseau prive chiffre. Rien n'est expose sur
+Internet, et `tailscale serve` fournit un vrai certificat HTTPS.
+
+```bash
+# Sur le PC, apres « tailscale up »
+tailscale serve --bg 8777
+tailscale status   # donne le nom complet de la machine
+```
+
+```toml
+[server]
+host = "127.0.0.1"          # l'agent n'ecoute que pour le tunnel
+public_url = "https://mon-pc.tail1234.ts.net"
+behind_proxy = true
+```
+
+Installez ensuite Tailscale sur le telephone : l'adresse fonctionne de partout,
+sans rien ouvrir sur la box.
+
+### Cloudflare Tunnel
+
+Utile pour une URL accessible sans installer de client sur le telephone.
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8777
+```
+
+La commande affiche une URL en `https://….trycloudflare.com`, a reporter dans
+`public_url`. Pour un usage durable, un tunnel nomme sur votre propre domaine est
+preferable, et **Cloudflare Access** ajoute une authentification devant l'agent —
+une seconde serrure en plus du jeton.
+
+### Redirection de port — a eviter
+
+Si vous y tenez malgre tout, ne le faites jamais en HTTP simple : le jeton et
+toute la telemetrie circuleraient en clair sur chaque reseau traverse. Il faut un
+certificat valide (un `tls_cert` auto-signe ne convient pas : les navigateurs
+refusent d'installer une application depuis une origine non approuvee) et,
+idealement, un port non standard. Overmlay vous avertit au demarrage si
+`public_url` est en HTTP.
+
+### Ce que fait Overmlay de son cote
+
+- **Verrouillage anti-force brute.** Apres 10 echecs d'authentification en cinq
+  minutes, l'adresse fautive est bloquee pendant cinq minutes (`max_auth_failures`
+  et `auth_lockout_seconds`). Le verrou porte sur l'adresse, pas sur le jeton :
+  une fois joignable depuis Internet, c'est ce qui rend une attaque par
+  enumeration sans interet pratique.
+- **Identification derriere le tunnel.** Avec `behind_proxy = true`, l'agent lit
+  `X-Forwarded-For` pour distinguer les clients — sans quoi ils partageraient tous
+  l'adresse du tunnel et un seul attaquant verrouillerait tout le monde. Cette
+  en-tete n'est **jamais** lue sans cette option : elle est triviale a forger, et
+  la croire permettrait d'echapper au verrou en changeant de valeur a chaque essai.
+- **Rotation du jeton.** `overmlay pair --rotate` en genere un nouveau et
+  invalide les telephones deja appaires. A faire au moindre doute.
 
 
 ## Ce qui est mesure, et comment
@@ -253,9 +332,11 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 - Un jeton aleatoire est genere au premier lancement et conserve dans le repertoire
   de donnees de l'utilisateur, en lecture seule proprietaire.
 - Les comparaisons de jeton se font a temps constant.
+- Une adresse est verrouillee apres des echecs d'authentification repetes.
 - Pour un usage strictement local, mettez `host = "127.0.0.1"`.
-- Le trafic est en HTTP simple, adapte a un reseau domestique de confiance :
-  n'exposez pas ce port sur Internet.
+- Sur le reseau local, le trafic est en HTTP simple : c'est adapte a un reseau
+  domestique de confiance. **Pour un acces depuis l'exterieur, passez par un
+  tunnel chiffre** — voir la section dediee plus haut.
 
 
 ## Limites connues
@@ -278,13 +359,16 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 197 tests
+python -m pytest -q                  # 236 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 ```
 
 Les tests de l'overlay demandent PySide6 et sont sautes automatiquement s'il est
-absent ; en environnement sans affichage, `QT_QPA_PLATFORM=offscreen` suffit.
+absent ; en environnement sans affichage, `QT_QPA_PLATFORM=offscreen` suffit. La
+logique de connexion de l'application mobile est testee en chargeant `app.js` dans
+un contexte Node muni d'un DOM et d'un WebSocket factices (`tests/webapp/`) ; ces
+tests sont sautes si Node n'est pas installe.
 
 Organisation du code :
 

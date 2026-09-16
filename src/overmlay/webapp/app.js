@@ -34,6 +34,7 @@ const elements = {
   panneauAffichage: document.getElementById('panneau-affichage'),
   listeMesures: document.getElementById('liste-mesures'),
   champUrl: document.getElementById('champ-url'),
+  champUrlDistante: document.getElementById('champ-url-distante'),
   champToken: document.getElementById('champ-token'),
   champVeille: document.getElementById('champ-veille'),
   messageReglages: document.getElementById('message-reglages'),
@@ -47,6 +48,10 @@ const elements = {
 
 const etat = {
   socket: null,
+  // Adresses a essayer, dans l'ordre : la locale d'abord quand on est chez soi,
+  // la distante ensuite. `indexAdresse` retient celle en cours d'essai.
+  adresses: [],
+  indexAdresse: 0,
   reconnexion: RECONNEXION_MIN,
   minuteur: null,
   masques: new Set(),
@@ -76,20 +81,37 @@ function ecrireJson(cle, valeur) {
   }
 }
 
+function normaliserAdresses(brut) {
+  const vues = new Set();
+  const propres = [];
+  for (const entree of brut) {
+    const texte = (entree || '').trim().replace(/\/+$/, '');
+    if (!texte || vues.has(texte)) continue;
+    vues.add(texte);
+    propres.push(texte);
+  }
+  return propres;
+}
+
 function chargerReglages() {
   const enregistres = lireJson(CLE_REGLAGES, {});
+  // `url` au singulier est le format des versions anterieures a l'acces distant.
+  const heritees = enregistres.urls || (enregistres.url ? [enregistres.url] : []);
   const reglages = {
-    url: enregistres.url || window.location.origin,
+    urls: normaliserAdresses(heritees.length ? heritees : [window.location.origin]),
     token: enregistres.token || '',
     veille: Boolean(enregistres.veille),
   };
-  // « overmlay pair » produit une URL du type http://ip:port/#token=... : on
+
+  // « overmlay pair » produit une URL du type https://hote/#token=... : on
   // recupere le jeton puis on nettoie la barre d'adresse pour ne pas l'y laisser.
   const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const jetonPartage = fragment.get('token');
   if (jetonPartage) {
     reglages.token = jetonPartage;
-    reglages.url = window.location.origin;
+    // L'origine servant la page est forcement joignable : on l'ajoute sans
+    // effacer l'autre, pour qu'un QR local puis un QR distant donnent les deux.
+    reglages.urls = normaliserAdresses([window.location.origin, ...reglages.urls]);
     ecrireJson(CLE_REGLAGES, reglages);
     history.replaceState(null, '', window.location.pathname);
   }
@@ -104,10 +126,14 @@ etat.masques = new Set(lireJson(CLE_MASQUES, []));
 function adresseWebSocket(base, token) {
   let racine;
   try {
-    racine = new URL(base, window.location.origin);
+    // URL absolue exigee : resolue contre l'origine, « mon-pc » deviendrait
+    // silencieusement l'adresse locale et l'application afficherait « distant »
+    // tout en parlant a la machine d'a cote.
+    racine = new URL(base);
   } catch (erreur) {
     return null;
   }
+  if (racine.protocol !== 'http:' && racine.protocol !== 'https:') return null;
   racine.protocol = racine.protocol === 'https:' ? 'wss:' : 'ws:';
   racine.pathname = '/ws';
   racine.hash = '';
@@ -120,14 +146,31 @@ function majEtat(texte, classe) {
   elements.etat.className = `etat etat--${classe}`;
 }
 
+function adresseCourante() {
+  if (!etat.adresses.length) return window.location.origin;
+  return etat.adresses[etat.indexAdresse % etat.adresses.length];
+}
+
+function etiquetteAdresse() {
+  if (etat.adresses.length < 2) return '';
+  return etat.indexAdresse % etat.adresses.length === 0 ? ' · local' : ' · distant';
+}
+
 function connecter() {
   deconnecter();
-  const adresse = adresseWebSocket(reglages.url, reglages.token);
+  etat.adresses = reglages.urls.length ? reglages.urls : [window.location.origin];
+  const base = adresseCourante();
+  const adresse = adresseWebSocket(base, reglages.token);
   if (!adresse) {
     majEtat('Adresse invalide', 'hors');
+    elements.messageReglages.textContent =
+      `Adresse inutilisable : ${base}. Indiquez une URL complete, par exemple ` +
+      'http://192.168.1.42:8777 ou https://mon-pc.exemple.fr.';
+    // Les autres adresses restent peut-etre valides : on ne bloque pas dessus.
+    if (etat.adresses.length > 1) programmerReconnexion({ adresseSuivante: true });
     return;
   }
-  majEtat('Connexion…', 'attente');
+  majEtat(`Connexion…${etiquetteAdresse()}`, 'attente');
 
   let socket;
   try {
@@ -140,7 +183,7 @@ function connecter() {
 
   socket.onopen = () => {
     etat.reconnexion = RECONNEXION_MIN;
-    majEtat('En direct', 'direct');
+    majEtat(`En direct${etiquetteAdresse()}`, 'direct');
     elements.messageReglages.textContent = '';
   };
 
@@ -165,7 +208,7 @@ function connecter() {
       return;
     }
     majEtat('Hors ligne', 'hors');
-    programmerReconnexion();
+    programmerReconnexion({ adresseSuivante: true });
   };
 
   socket.onerror = () => socket.close();
@@ -183,11 +226,22 @@ function deconnecter() {
   }
 }
 
-function programmerReconnexion() {
+function programmerReconnexion(options = {}) {
   if (etat.minuteur) return;
-  const delai = etat.reconnexion;
-  // Recul exponentiel : un telephone qui sort du reseau ne doit pas marteler l'agent.
-  etat.reconnexion = Math.min(etat.reconnexion * 2, RECONNEXION_MAX);
+  const total = etat.adresses.length || 1;
+  let delai = etat.reconnexion;
+
+  if (options.adresseSuivante && total > 1) {
+    etat.indexAdresse = (etat.indexAdresse + 1) % total;
+    // Tant qu'il reste une adresse a essayer dans le tour, on enchaine vite :
+    // basculer du local vers le distant ne doit pas attendre le recul complet.
+    if (etat.indexAdresse !== 0) delai = RECONNEXION_MIN;
+  }
+  if (!options.adresseSuivante || total === 1 || etat.indexAdresse === 0) {
+    // Recul exponentiel : un telephone hors reseau ne doit pas marteler l'agent.
+    etat.reconnexion = Math.min(etat.reconnexion * 2, RECONNEXION_MAX);
+  }
+
   etat.minuteur = setTimeout(() => {
     etat.minuteur = null;
     connecter();
@@ -445,13 +499,18 @@ elements.btnAffichage.addEventListener('click', () => {
 });
 
 elements.btnConnecter.addEventListener('click', () => {
+  const saisies = normaliserAdresses([
+    elements.champUrl.value,
+    elements.champUrlDistante.value,
+  ]);
   reglages = {
-    url: elements.champUrl.value.trim() || window.location.origin,
+    urls: saisies.length ? saisies : [window.location.origin],
     token: elements.champToken.value.trim(),
     veille: elements.champVeille.checked,
   };
   ecrireJson(CLE_REGLAGES, reglages);
   etat.reconnexion = RECONNEXION_MIN;
+  etat.indexAdresse = 0;
   elements.messageReglages.textContent = '';
   majVerrouEcran();
   connecter();
@@ -466,7 +525,8 @@ elements.btnOublier.addEventListener('click', () => {
   } catch (erreur) {
     /* ignore */
   }
-  reglages = { url: window.location.origin, token: '', veille: false };
+  reglages = { urls: [window.location.origin], token: '', veille: false };
+  etat.indexAdresse = 0;
   etat.masques.clear();
   remplirFormulaire();
   majEtat('Hors ligne', 'hors');
@@ -482,12 +542,15 @@ document.addEventListener('visibilitychange', () => {
   // Un telephone qui sort de veille a souvent perdu la socket sans evenement.
   if (!etat.socket || etat.socket.readyState > WebSocket.OPEN) {
     etat.reconnexion = RECONNEXION_MIN;
+    // Sortie de veille : on peut avoir change de reseau, donc on repart du local.
+    etat.indexAdresse = 0;
     connecter();
   }
 });
 
 function remplirFormulaire() {
-  elements.champUrl.value = reglages.url;
+  elements.champUrl.value = reglages.urls[0] || '';
+  elements.champUrlDistante.value = reglages.urls[1] || '';
   elements.champToken.value = reglages.token;
   elements.champVeille.checked = reglages.veille;
 }

@@ -45,14 +45,20 @@ def local_ip_addresses() -> list[str]:
     return filtered or ["127.0.0.1"]
 
 
-def pairing_url(host: str, port: int, token: str = "") -> str:
+def pairing_url(host: str, port: int, token: str = "", *, scheme: str = "http") -> str:
     """URL a ouvrir sur le telephone.
 
     Le jeton passe dans le fragment (`#token=`) : contrairement a la chaine de
     requete, un fragment n'est ni journalise par les serveurs ni transmis dans
     l'en-tete `Referer`.
     """
-    base = f"http://{host}:{port}/"
+    base = f"{scheme}://{host}:{port}/"
+    return with_token(base, token)
+
+
+def with_token(base_url: str, token: str = "") -> str:
+    """Ajoute le jeton en fragment a une URL deja complete (cas d'un tunnel)."""
+    base = base_url if base_url.endswith("/") else f"{base_url}/"
     return f"{base}#token={quote(token, safe='')}" if token else base
 
 
@@ -87,12 +93,28 @@ def render_qr(text: str) -> str | None:
     return "\n".join(lines)
 
 
-def pairing_summary(port: int, token: str = "") -> dict[str, object]:
+def pairing_summary(
+    port: int,
+    token: str = "",
+    *,
+    public_url: str = "",
+    scheme: str = "http",
+) -> dict[str, object]:
+    """Adresses d'appairage, locales et — si configuree — publique.
+
+    Quand l'agent est joignable par un tunnel, c'est l'URL publique qui part dans
+    le QR code : elle fonctionne aussi bien depuis la maison que depuis l'exterieur,
+    alors que l'adresse locale ne vaut que sur place.
+    """
     addresses = local_ip_addresses()
-    primary = pairing_url(addresses[0], port, token)
+    local_urls = [pairing_url(address, port, token, scheme=scheme) for address in addresses]
+    remote_url = with_token(public_url, token) if public_url else ""
+    primary = remote_url or local_urls[0]
     return {
         "addresses": addresses,
-        "urls": [pairing_url(address, port, token) for address in addresses],
+        "urls": local_urls,
+        "local_url": local_urls[0],
+        "remote_url": remote_url,
         "primary_url": primary,
         "qr": render_qr(primary),
         "token": token,

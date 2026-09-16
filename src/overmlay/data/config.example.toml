@@ -70,6 +70,40 @@ token = ""
 # Le telephone peut de toute facon masquer ce qu'il ne veut pas voir.
 metrics = []
 
+# --- Acces depuis un autre reseau -------------------------------------------
+#
+# Par defaut l'agent n'est joignable que sur le reseau local. Pour y acceder
+# depuis l'exterieur, la voie recommandee est un tunnel ou un VPN qui termine le
+# TLS a votre place (Tailscale, Cloudflare Tunnel...) : voir le README. Ouvrir un
+# port sur la box expose la machine aux balayages automatises d'Internet.
+
+# URL publique de l'agent, quand un tunnel est en place. C'est elle qui part dans
+# le QR code de « overmlay pair ». Laissez vide sans acces distant.
+public_url = ""
+
+# A activer quand un tunnel ou un reverse proxy se trouve devant l'agent : les
+# en-tetes X-Forwarded-For et X-Forwarded-Proto sont alors prises en compte, ce
+# qui permet d'identifier le vrai client. Sans proxy, laissez false : ces
+# en-tetes sont triviales a forger et contourneraient le verrouillage ci-dessous.
+behind_proxy = false
+
+# Adresses autorisees a presenter ces en-tetes ("*" pour toutes). Un tunnel
+# installe sur la meme machine sort de 127.0.0.1.
+trusted_proxies = "127.0.0.1"
+
+# Certificat et cle privee pour servir directement en HTTPS. Inutiles quand le
+# tunnel termine deja le TLS, ce qui est le cas courant. Attention : un
+# certificat auto-signe empeche l'installation de l'application sur le telephone,
+# les navigateurs refusant les service workers hors origine sure et approuvee.
+tls_cert = ""
+tls_key = ""
+
+# Verrouillage d'une adresse apres des echecs d'authentification repetes. C'est
+# ce qui rend une attaque par force brute sans interet une fois l'agent joignable
+# depuis Internet.
+max_auth_failures = 10
+auth_lockout_seconds = 300
+
 
 [overlay]
 enabled = true

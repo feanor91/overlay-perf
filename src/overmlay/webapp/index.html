@@ -30,9 +30,16 @@
 
 <section id="panneau-reglages" class="panneau" hidden>
   <h2>Connexion</h2>
-  <label for="champ-url">Adresse de l'agent</label>
+  <p class="aide">
+    Renseignez les deux adresses si vous utilisez l'application hors de chez vous :
+    l'application essaie la locale en premier, puis bascule sur la distante.
+  </p>
+  <label for="champ-url">Adresse sur le reseau local</label>
   <input id="champ-url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
          placeholder="http://192.168.1.42:8777">
+  <label for="champ-url-distante">Adresse a distance (tunnel HTTPS)</label>
+  <input id="champ-url-distante" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+         placeholder="https://mon-pc.exemple.fr">
   <label for="champ-token">Jeton d'acces</label>
   <input id="champ-token" type="password" autocomplete="off" spellcheck="false"
          placeholder="colle depuis « overmlay pair »">

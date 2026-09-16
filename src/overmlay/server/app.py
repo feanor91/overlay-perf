@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from overmlay import __version__
 from overmlay.fps.tracker import FrameTimeTracker
 from overmlay.hub import MetricsHub
-from overmlay.server.auth import extract_token, token_matches
+from overmlay.server.auth import AuthThrottle, client_address, extract_token, token_matches
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +26,8 @@ WEBAPP_DIR = Path(__file__).resolve().parent.parent / "webapp"
 
 #: Code de fermeture WebSocket « Policy Violation » : jeton absent ou invalide.
 WS_POLICY_VIOLATION = 1008
+#: Code de fermeture WebSocket « Try Again Later » : adresse temporairement verrouillee.
+WS_TRY_LATER = 1013
 
 
 class FramePayload(BaseModel):
@@ -43,12 +45,21 @@ def create_app(
     tracker: FrameTimeTracker | None = None,
     metrics: list[str] | None = None,
     manage_hub: bool = True,
+    throttle: AuthThrottle | None = None,
+    trust_proxy: bool = False,
 ) -> FastAPI:
     """Construit l'application ASGI.
 
     `manage_hub` laisse le serveur demarrer et arreter le hub ; on le desactive
     quand l'overlay tourne dans le meme processus et pilote deja son cycle de vie.
+
+    `throttle` verrouille une adresse apres des echecs d'authentification repetes,
+    ce qui devient indispensable des que l'agent est joignable depuis Internet.
+    `trust_proxy` autorise la lecture de `X-Forwarded-For` pour identifier le vrai
+    client derriere un tunnel : a n'activer que si un proxy de confiance est en
+    amont, cet en-tete etant trivial a forger autrement.
     """
+    throttle = throttle or AuthThrottle()
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -76,11 +87,25 @@ def create_app(
     app.state.token = token
     app.state.tracker = tracker
     app.state.metrics = metrics or []
+    app.state.throttle = throttle
 
     def require_token(request: Request) -> None:
+        client = client_address(
+            (request.client.host, request.client.port) if request.client else None,
+            dict(request.headers),
+            trust_proxy,
+        )
+        if (attente := throttle.retry_after(client)) > 0:
+            raise HTTPException(
+                status_code=429,
+                detail="Trop d'echecs d'authentification : reessayez plus tard",
+                headers={"Retry-After": str(int(attente) + 1)},
+            )
         presented = extract_token(dict(request.headers), dict(request.query_params))
         if not token_matches(token, presented):
+            throttle.record_failure(client)
             raise HTTPException(status_code=401, detail="Jeton absent ou invalide")
+        throttle.record_success(client)
 
     guarded = [Depends(require_token)]
 
@@ -167,11 +192,21 @@ def create_app(
 
     @app.websocket("/ws")
     async def stream(websocket: WebSocket) -> None:
+        client = client_address(
+            (websocket.client.host, websocket.client.port) if websocket.client else None,
+            dict(websocket.headers),
+            trust_proxy,
+        )
+        if throttle.retry_after(client) > 0:
+            await websocket.close(code=WS_TRY_LATER, reason="Trop d'echecs")
+            return
         presented = extract_token(dict(websocket.headers), dict(websocket.query_params))
         if not token_matches(token, presented):
+            throttle.record_failure(client)
             # Refus avant acceptation : le navigateur voit un echec de handshake.
             await websocket.close(code=WS_POLICY_VIOLATION, reason="Jeton invalide")
             return
+        throttle.record_success(client)
         await websocket.accept()
 
         selection = _parse_keys(websocket.query_params.get("keys")) or app.state.metrics

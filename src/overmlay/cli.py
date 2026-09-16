@@ -45,7 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     sensors = sub.add_parser("sensors", help="Lister les capteurs detectes et un instantane")
     sensors.add_argument("--json", action="store_true", help="Sortie JSON")
 
-    sub.add_parser("pair", help="Adresse et QR code a scanner depuis le telephone")
+    pair = sub.add_parser("pair", help="Adresse et QR code a scanner depuis le telephone")
+    pair.add_argument(
+        "--rotate",
+        action="store_true",
+        help="Generer un nouveau jeton et invalider les telephones deja appaires",
+    )
 
     config_cmd = sub.add_parser("config", help="Gerer le fichier de configuration")
     config_cmd.add_argument("--init", action="store_true", help="Creer un fichier d'exemple")
@@ -76,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     if commande == "sensors":
         return commande_sensors(config, args)
     if commande == "pair":
-        return commande_pair(config)
+        return commande_pair(config, args)
     if commande == "serve":
         return commande_run(config, overlay=False, server=True, args=args)
     if commande == "overlay":
@@ -154,17 +159,36 @@ def commande_sensors(config: Config, args: argparse.Namespace) -> int:
     return 0
 
 
-def commande_pair(config: Config) -> int:
-    from overmlay.config import resolve_token
+def commande_pair(config: Config, args: argparse.Namespace | None = None) -> int:
+    from overmlay.config import resolve_token, rotate_token
     from overmlay.server.pairing import pairing_summary
 
-    token = resolve_token(config)
-    resume = pairing_summary(config.server.port, token)
+    if args is not None and getattr(args, "rotate", False):
+        try:
+            token = rotate_token(config)
+        except ConfigError as erreur:
+            print(erreur, file=sys.stderr)
+            return 1
+        print("Nouveau jeton genere : les telephones deja appaires devront rescanner.\n")
+    else:
+        token = resolve_token(config)
 
-    print("Ouvrez cette adresse sur le telephone, sur le meme reseau local :\n")
+    schema = "https" if (config.server.tls_cert and config.server.tls_key) else "http"
+    resume = pairing_summary(
+        config.server.port, token, public_url=config.server.public_url, scheme=schema
+    )
+
+    if resume["remote_url"]:
+        print("Ouvrez cette adresse sur le telephone, depuis n'importe quel reseau :\n")
+    else:
+        print("Ouvrez cette adresse sur le telephone, sur le meme reseau local :\n")
     print(f"  {resume['primary_url']}\n")
+
+    if resume["remote_url"]:
+        print("Sur place, l'adresse locale evite le detour par Internet :")
+        print(f"  {resume['local_url']}\n")
     autres = [url for url in resume["urls"] if url != resume["primary_url"]]
-    if autres:
+    if autres and not resume["remote_url"]:
         print("Autres adresses possibles :")
         for url in autres:
             print(f"  {url}")
@@ -219,31 +243,83 @@ def _creer_serveur(runtime: Runtime):
             "pip install 'overmlay[server]'"
         ) from erreur
 
+    from overmlay.server.auth import AuthThrottle
+
+    serveur_config = runtime.config.server
     app = create_app(
         runtime.hub,
         token=runtime.token,
         tracker=runtime.tracker,
-        metrics=runtime.config.server.metrics,
+        metrics=serveur_config.metrics,
         manage_hub=False,  # le hub est demarre par la boucle appelante
+        throttle=AuthThrottle(
+            max_failures=serveur_config.max_auth_failures,
+            lockout=float(serveur_config.auth_lockout_seconds),
+        ),
+        trust_proxy=serveur_config.behind_proxy,
     )
+    options: dict[str, object] = {}
+    if serveur_config.tls_cert and serveur_config.tls_key:
+        options["ssl_certfile"] = str(Path(serveur_config.tls_cert).expanduser())
+        options["ssl_keyfile"] = str(Path(serveur_config.tls_key).expanduser())
+    if serveur_config.behind_proxy:
+        # Sans cela, uvicorn ignore X-Forwarded-Proto et le client se croit en clair.
+        options["proxy_headers"] = True
+        options["forwarded_allow_ips"] = serveur_config.trusted_proxies
+
     configuration = uvicorn.Config(
         app,
-        host=runtime.config.server.host,
-        port=runtime.config.server.port,
+        host=serveur_config.host,
+        port=serveur_config.port,
         log_level="warning",
         access_log=False,
+        **options,
     )
     return uvicorn.Server(configuration)
 
 
-def _annoncer_serveur(runtime: Runtime) -> None:
-    from overmlay.server.pairing import local_ip_addresses, pairing_url
+def _schema(runtime: Runtime) -> str:
+    return "https" if (runtime.config.server.tls_cert and runtime.config.server.tls_key) else "http"
 
-    adresse = local_ip_addresses()[0]
-    port = runtime.config.server.port
-    print(f"Serveur Overmlay sur http://{adresse}:{port}/")
-    print(f"Telephone : {pairing_url(adresse, port, runtime.token)}")
+
+def _avertir_exposition(runtime: Runtime) -> None:
+    """Signale les configurations ou le jeton circulerait en clair hors du domicile."""
+    serveur = runtime.config.server
+    if serveur.public_url.startswith("http://"):
+        print(
+            "\nAttention : public_url est en HTTP simple. Le jeton et toute la "
+            "telemetrie circuleront en clair sur Internet, lisibles par chaque "
+            "reseau traverse. Utilisez un tunnel HTTPS (voir le README).",
+            file=sys.stderr,
+        )
+    if serveur.public_url.startswith("https://") and not serveur.behind_proxy:
+        print(
+            "\nAstuce : avec un tunnel devant l'agent, activez « behind_proxy » "
+            "pour que les adresses des clients et le protocole soient correctement "
+            "identifies (verrouillage anti-force brute compris).",
+            file=sys.stderr,
+        )
+
+
+def _annoncer_serveur(runtime: Runtime) -> None:
+    from overmlay.server.pairing import local_ip_addresses, pairing_url, with_token
+
+    serveur = runtime.config.server
+    # Lie sur la boucle locale (cas classique derriere un tunnel), annoncer
+    # l'adresse du reseau local serait faux : personne ne peut s'y connecter.
+    boucle_locale = serveur.host in ("127.0.0.1", "localhost", "::1")
+    adresse = serveur.host if boucle_locale else local_ip_addresses()[0]
+    port = serveur.port
+    schema = _schema(runtime)
+    print(f"Serveur Overmlay sur {schema}://{adresse}:{port}/")
+    etiquette = "machine locale" if boucle_locale else "reseau local"
+    lien = pairing_url(adresse, port, runtime.token, scheme=schema)
+    print(f"Telephone ({etiquette}) : {lien}")
+    if serveur.public_url:
+        distante = with_token(serveur.public_url, runtime.token)
+        print(f"Telephone (a distance)   : {distante}")
     print("Astuce : « overmlay pair » affiche un QR code a scanner.")
+    _avertir_exposition(runtime)
 
 
 def _run_serveur_seul(runtime: Runtime) -> int:

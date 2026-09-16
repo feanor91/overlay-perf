@@ -83,9 +83,25 @@ class ServerConfig:
     port: int = 8777
     #: Jeton partage exige par l'API ; genere et persiste automatiquement si vide.
     token: str = ""
-    #: Intervalle de diffusion WebSocket ; 0 suit la cadence des capteurs.
-    push_interval: float = 0.0
     metrics: list[str] = field(default_factory=list)
+
+    # --- Acces depuis un autre reseau ---------------------------------------
+
+    #: URL publique quand l'agent est joignable via un tunnel ou un reverse proxy.
+    #: Sert a `overmlay pair` : c'est elle qui part dans le QR code.
+    public_url: str = ""
+    #: Lire X-Forwarded-For et X-Forwarded-Proto. A n'activer que derriere un
+    #: proxy de confiance : ces en-tetes sont triviaux a forger autrement.
+    behind_proxy: bool = False
+    #: Adresses autorisees a presenter ces en-tetes (`*` pour toutes).
+    trusted_proxies: str = "127.0.0.1"
+    #: Certificat et cle privee pour servir directement en HTTPS. Inutiles quand
+    #: le tunnel termine deja le TLS, ce qui est le cas le plus courant.
+    tls_cert: str = ""
+    tls_key: str = ""
+    #: Verrouillage d'une adresse apres des echecs d'authentification repetes.
+    max_auth_failures: int = 10
+    auth_lockout_seconds: int = 300
 
 
 @dataclass(slots=True)
@@ -151,12 +167,30 @@ def _validate(config: Config) -> None:
         raise ConfigError(f"[fps] mode doit etre parmi {', '.join(VALID_FPS_MODES)}")
     if not 1 <= config.server.port <= 65535:
         raise ConfigError("[server] port doit etre compris entre 1 et 65535")
+    _validate_remote_access(config.server)
     if config.overlay.position not in VALID_POSITIONS:
         raise ConfigError(f"[overlay] position doit etre parmi {', '.join(VALID_POSITIONS)}")
     if not 0.05 <= config.overlay.opacity <= 1.0:
         raise ConfigError("[overlay] opacity doit etre compris entre 0.05 et 1.0")
     if config.overlay.columns < 1:
         raise ConfigError("[overlay] columns doit valoir au moins 1")
+
+
+def _validate_remote_access(server: ServerConfig) -> None:
+    """Controle les options qui exposent l'agent au-dela du reseau local."""
+    if server.public_url and not server.public_url.startswith(("http://", "https://")):
+        raise ConfigError("[server] public_url doit commencer par http:// ou https://")
+
+    if bool(server.tls_cert) != bool(server.tls_key):
+        raise ConfigError("[server] tls_cert et tls_key vont de pair")
+    for champ, valeur in (("tls_cert", server.tls_cert), ("tls_key", server.tls_key)):
+        if valeur and not Path(valeur).expanduser().is_file():
+            raise ConfigError(f"[server] {champ} : fichier introuvable ({valeur})")
+
+    if server.max_auth_failures < 1:
+        raise ConfigError("[server] max_auth_failures doit valoir au moins 1")
+    if server.auth_lockout_seconds < 1:
+        raise ConfigError("[server] auth_lockout_seconds doit valoir au moins 1")
 
 
 def load_config(path: Path | str | None = None) -> Config:
@@ -183,6 +217,27 @@ def load_config(path: Path | str | None = None) -> Config:
 
     _validate(config)
     return config
+
+
+def rotate_token(config: Config) -> str:
+    """Remplace le jeton persiste par un nouveau, invalidant tous les telephones.
+
+    A utiliser si le jeton a pu fuiter, en particulier apres une exposition
+    publique. Un jeton fixe dans le fichier de configuration prime toujours : on
+    refuse alors d'agir en silence.
+    """
+    if config.server.token:
+        raise ConfigError(
+            "[server] token est fixe dans la configuration : modifiez-le a la main "
+            "ou videz-le pour laisser Overmlay gerer le jeton."
+        )
+    token_file = data_path() / "token"
+    token = secrets.token_urlsafe(24)
+    token_file.parent.mkdir(parents=True, exist_ok=True)
+    token_file.write_text(token, encoding="utf-8")
+    with contextlib.suppress(OSError):
+        token_file.chmod(0o600)
+    return token
 
 
 def resolve_token(config: Config, *, create: bool = True) -> str:

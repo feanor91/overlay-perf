@@ -26,6 +26,12 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
 
+      # La logique de connexion de l'application mobile est testee sous Node ;
+      # sans lui, ces tests seraient silencieusement sautes.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Installer le paquet et ses dependances de developpement
         run: |
           python -m pip install --upgrade pip
@@ -47,6 +53,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Bibliotheques systeme requises par Qt
         run: |

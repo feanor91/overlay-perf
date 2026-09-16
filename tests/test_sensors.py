@@ -685,12 +685,21 @@ def test_absence_totale_de_capteurs_journalisee_sans_collecte(caplog):
 #
 # Windows n'est pas la plateforme de ces tests : psutil et asyncio verifient
 # `sys.platform` a l'import et refusent de charger sous une fausse valeur. On
-# importe donc tout normalement puis on ne patche `sys.platform` que dans le
-# module `overlay.sensors` deja charge, ce qui isole la seule branche visee.
+# importe donc tout normalement puis on ne patche que l'attribut `sys.platform`
+# lui-meme (un seul objet `sys`, partage par tout le process : rien n'isole
+# vraiment la branche visee de ce que d'autres modules en lisent au meme
+# moment). `detect_backends()` construit aussi un `NvidiaBackend()`, dont le
+# constructeur appelle `shutil.which("nvidia-smi")` : depuis Python 3.12, cet
+# appel emprunte un vrai chemin de code Windows (`_winapi.NeedCurrentDirectory
+# ForExePath`) des que `sys.platform == "win32"`, y compris ici ou `_winapi`
+# reste absent puisqu'on tourne reellement sous Linux. `shutil.which` est donc
+# neutralise en meme temps, sans quoi il levait une `AttributeError` sans
+# rapport avec ce que ces tests verifient.
 
 
 @pytest.fixture
 def windows_simule(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda _: None)
     monkeypatch.setattr("overlay.sensors.sys.platform", "win32")
 
 

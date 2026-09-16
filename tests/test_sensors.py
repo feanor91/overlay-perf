@@ -9,9 +9,9 @@ from overlay.sensors.amdgpu import AmdGpuBackend
 from overlay.sensors.base import SensorBackend, to_float
 from overlay.sensors.linux_hwmon import LinuxHwmonBackend
 from overlay.sensors.mock import MockBackend
-from overlay.sensors.nvidia import NvidiaBackend, parse_smi_csv
+from overlay.sensors.nvidia import NvidiaBackend, _nom_court, parse_smi_csv
 from overlay.sensors.psutil_backend import PsutilBackend
-from overlay.sensors.windows_lhm import parse_tree
+from overlay.sensors.windows_lhm import _aliaser_cpu, parse_tree
 
 
 @pytest.mark.parametrize(
@@ -173,6 +173,80 @@ def test_vram_bornee_par_la_capacite_de_la_carte():
     assert vram.range == (0.0, 12282.0)
 
 
+# --- Etiquettes NVIDIA : nom de la carte plutot qu'un index ambigu ---------
+#
+# NVML/nvidia-smi numerotent uniquement les cartes NVIDIA : sur une machine avec
+# un GPU integre en plus, leur index ne correspond pas a celui du Gestionnaire
+# des taches Windows, qui compte tous les adaptateurs. D'ou la confusion possible
+# entre "GPU 0" (NVML) et "GPU 1" (Windows) pour la meme carte.
+
+
+@pytest.mark.parametrize(
+    ("nom", "attendu"),
+    [
+        ("NVIDIA GeForce RTX 4070", "RTX 4070"),
+        ("NVIDIA GeForce RTX 4090 Laptop GPU", "RTX 4090 Laptop GPU"),
+        ("NVIDIA GeForce GTX 1660 Ti", "GTX 1660 Ti"),
+        ("NVIDIA T400", "T400"),
+        # Gammes professionnelles : seul le prefixe "NVIDIA " saute, chaque mot
+        # de la gamme (Quadro, Tesla, RTX A-series) reste necessaire pour l'identifier.
+        ("NVIDIA RTX A4000", "RTX A4000"),
+        ("NVIDIA Quadro P2000", "Quadro P2000"),
+        ("Tesla T4", "Tesla T4"),
+    ],
+)
+def test_nom_court(nom, attendu):
+    assert _nom_court(nom) == attendu
+
+
+def test_etiquette_gpu_unique_utilise_le_nom_sans_index():
+    """Avec une seule carte, l'index NVML n'apporte rien : autant afficher le modele."""
+    ligne = parse_smi_csv(
+        "0, NVIDIA GeForce RTX 4070, 44, 1, 1, 1777, 12282, 30, 40.6, 200.00, 1920, 10501"
+    )[0]
+    backend = NvidiaBackend.__new__(NvidiaBackend)
+    charge = next(r for r in backend._to_readings(ligne) if r.key == "gpu.0.load")
+    assert charge.label == "RTX 4070 charge"
+    assert "GPU 0" not in charge.label
+
+
+def test_etiquette_gpu_multiple_ajoute_un_index_pour_distinguer():
+    """Avec deux cartes identiques, seul l'index les distingue : il redevient utile."""
+    ligne = parse_smi_csv(
+        "0, NVIDIA GeForce RTX 4090, 55, 20, 5, 4000, 24564, 40, 120.0, 450.0, 2200, 10800"
+    )[0]
+    ligne["count"] = 2.0
+    backend = NvidiaBackend.__new__(NvidiaBackend)
+    charge = next(r for r in backend._to_readings(ligne) if r.key == "gpu.0.load")
+    assert charge.label == "RTX 4090 #0 charge"
+
+
+def test_read_injecte_le_nombre_de_cartes(monkeypatch):
+    """Verifie le branchement complet : read() calcule et transmet `count`."""
+    backend = NvidiaBackend.__new__(NvidiaBackend)
+    backend.name = "nvidia"
+    backend._nvml = None
+    lignes = parse_smi_csv(
+        "0, NVIDIA GeForce RTX 4090, 55, 20, 5, 4000, 24564, 40, 120.0, 450.0, 2200, 10800\n"
+        "1, NVIDIA GeForce RTX 4090, 50, 10, 3, 3000, 24564, 35, 100.0, 450.0, 2100, 10700"
+    )
+    monkeypatch.setattr(backend, "_read_smi", lambda: lignes)
+    etiquettes = {r.key: r.label for r in backend.read() if r.key in ("gpu.0.load", "gpu.1.load")}
+    assert etiquettes == {"gpu.0.load": "RTX 4090 #0 charge", "gpu.1.load": "RTX 4090 #1 charge"}
+
+
+def test_read_avec_une_seule_carte_omet_l_index(monkeypatch):
+    backend = NvidiaBackend.__new__(NvidiaBackend)
+    backend.name = "nvidia"
+    backend._nvml = None
+    ligne = parse_smi_csv(
+        "0, NVIDIA GeForce RTX 4070, 44, 1, 1, 1777, 12282, 30, 40.6, 200.00, 1920, 10501"
+    )
+    monkeypatch.setattr(backend, "_read_smi", lambda: ligne)
+    charge = next(r for r in backend.read() if r.key == "gpu.0.load")
+    assert charge.label == "RTX 4070 charge"
+
+
 # --- LibreHardwareMonitor --------------------------------------------------
 
 
@@ -267,6 +341,119 @@ def test_lhm_classe_le_ventilateur_gpu_avec_le_gpu():
 def test_arbre_lhm_vide():
     assert parse_tree({}) == []
     assert parse_tree({"Children": []}) == []
+
+
+# --- Alias cpu.temp / cpu.power : synthese depuis les sondes LibreHardwareMonitor
+#
+# Sans cela, aucune mesure LHM ne repond jamais a ces cles : leur intitule depend
+# du modele de processeur ("Core (Tctl/Tdie)", "CPU Package"...). Les intitules
+# testes ici sont ceux verifies dans le code source de LibreHardwareMonitor
+# (AmdCpu.cs, IntelCpu.cs), pas devines.
+
+
+def _arbre_cpu(nom_cpu, temperatures, puissances=()):
+    enfants = []
+    if temperatures:
+        enfants.append({"Text": "Temperatures", "Children": list(temperatures)})
+    if puissances:
+        enfants.append({"Text": "Powers", "Children": list(puissances)})
+    return {
+        "Text": "Sensor",
+        "Children": [{"Text": "PC", "Children": [{"Text": nom_cpu, "Children": enfants}]}],
+    }
+
+
+def _sonde(text, valeur, sensor_type, sensor_id, maximum=None):
+    sonde = {"Text": text, "Value": valeur, "Type": sensor_type, "SensorId": sensor_id}
+    if maximum is not None:
+        sonde["Max"] = maximum
+    return sonde
+
+
+def test_alias_cpu_amd_choisit_le_capteur_combine_pas_un_coeur_ni_un_ccd():
+    arbre = _arbre_cpu(
+        "AMD Ryzen 7 5800X",
+        temperatures=[
+            _sonde("Core (Tctl/Tdie)", "62,3 °C", "Temperature", "/amdcpu/0/t/2", "89,1 °C"),
+            _sonde("Core (Tctl)", "63,1 °C", "Temperature", "/amdcpu/0/t/0"),
+            _sonde("CCD1 (Tdie)", "60,0 °C", "Temperature", "/amdcpu/0/t/5"),
+        ],
+        puissances=[
+            _sonde("Package", "88,4 W", "Power", "/amdcpu/0/p/0"),
+            _sonde("Core #0 (SMU)", "12,1 W", "Power", "/amdcpu/0/p/1"),
+        ],
+    )
+    readings = parse_tree(arbre)
+    alias = {r.key: r for r in _aliaser_cpu(readings, source="lhm")}
+
+    assert alias["cpu.temp"].value == 62.3  # Tctl/Tdie, pas Tctl ni le CCD
+    assert alias["cpu.temp"].maximum == 89.1
+    assert alias["cpu.temp"].extra["alias_de"].endswith("core__tctl_tdie")
+    assert alias["cpu.power"].value == 88.4  # Package, pas le coeur #0
+    assert alias["cpu.temp"].group is Group.CPU
+    assert alias["cpu.temp"].kind is Kind.TEMPERATURE
+
+
+def test_alias_cpu_intel_prefere_cpu_package_a_core_max_et_cpu_cores():
+    arbre = _arbre_cpu(
+        "11th Gen Intel Core i7-11700K",
+        temperatures=[
+            _sonde("CPU Package", "58,0 °C", "Temperature", "/intelcpu/0/t/1", "100,0 °C"),
+            _sonde("Core Max", "60,0 °C", "Temperature", "/intelcpu/0/t/2"),
+            _sonde("CPU Core #1", "55,0 °C", "Temperature", "/intelcpu/0/t/3"),
+        ],
+        puissances=[
+            _sonde("CPU Package", "45,2 W", "Power", "/intelcpu/0/p/0"),
+            _sonde("CPU Cores", "30,1 W", "Power", "/intelcpu/0/p/1"),
+        ],
+    )
+    readings = parse_tree(arbre)
+    alias = {r.key: r for r in _aliaser_cpu(readings, source="lhm")}
+
+    assert alias["cpu.temp"].value == 58.0
+    assert alias["cpu.power"].value == 45.2
+
+
+def test_alias_cpu_absent_sans_sonde_globale_reconnue():
+    """Un materiel non couvert par la liste verifiee ne doit jamais deviner."""
+    arbre = _arbre_cpu(
+        "CPU inconnu",
+        temperatures=[
+            _sonde("Core #0", "50,0 °C", "Temperature", "/x/0"),
+            _sonde("Core #1", "52,0 °C", "Temperature", "/x/1"),
+        ],
+    )
+    readings = parse_tree(arbre)
+    assert _aliaser_cpu(readings, source="lhm") == []
+
+
+def test_alias_cpu_coexiste_avec_les_cles_lhm_d_origine():
+    """L'alias s'ajoute a la mesure LHM complete, il ne la remplace pas."""
+    arbre = _arbre_cpu(
+        "AMD Ryzen 7 5800X",
+        temperatures=[_sonde("Core (Tctl/Tdie)", "62,3 °C", "Temperature", "/amdcpu/0/t/2")],
+    )
+    readings = parse_tree(arbre)
+    toutes = readings + _aliaser_cpu(readings, source="lhm")
+    cles = {r.key for r in toutes}
+    assert "cpu.temp" in cles
+    assert any(cle.startswith("lhm.") and "tctl_tdie" in cle for cle in cles)
+
+
+def test_backend_lhm_expose_les_alias_cpu(monkeypatch):
+    """Verifie le branchement complet : read() ajoute les alias a la volee."""
+    from overlay.sensors.windows_lhm import LibreHardwareMonitorBackend
+
+    arbre = _arbre_cpu(
+        "AMD Ryzen 7 5800X",
+        temperatures=[_sonde("Core (Tctl/Tdie)", "62,3 °C", "Temperature", "/amdcpu/0/t/2")],
+        puissances=[_sonde("Package", "88,4 W", "Power", "/amdcpu/0/p/0")],
+    )
+    backend = LibreHardwareMonitorBackend()
+    monkeypatch.setattr(backend, "_fetch", lambda: arbre)
+    cles = {r.key: r.value for r in backend.read()}
+    assert cles["cpu.temp"] == 62.3
+    assert cles["cpu.power"] == 88.4
 
 
 # --- amdgpu ----------------------------------------------------------------

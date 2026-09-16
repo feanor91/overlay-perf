@@ -51,6 +51,21 @@ def parse_smi_csv(output: str) -> list[dict[str, float | str | None]]:
     return rows
 
 
+def _nom_court(name: str) -> str:
+    """Racourcit un nom de carte pour tenir sur une ligne d'overlay compact.
+
+    "NVIDIA GeForce RTX 4070" -> "RTX 4070" : repeter le nom complet sur chaque
+    mesure (charge, temperature, VRAM...) alourdirait l'affichage sans rien
+    ajouter des qu'il n'y a qu'une carte. Les gammes professionnelles (Quadro,
+    Tesla, RTX A-series) ne sont pas raccourcies au-dela du prefixe "NVIDIA " :
+    chacun de leurs mots identifie la gamme, contrairement a "GeForce".
+    """
+    for prefixe in ("NVIDIA GeForce ", "NVIDIA "):
+        if name.startswith(prefixe):
+            return name[len(prefixe) :].strip() or name
+    return name
+
+
 class NvidiaBackend(SensorBackend):
     name = "nvidia"
     description = "GPU NVIDIA (NVML ou nvidia-smi) : charge, temperature, VRAM, ventilateur"
@@ -86,8 +101,12 @@ class NvidiaBackend(SensorBackend):
 
     def read(self) -> list[Reading]:
         rows = self._read_nvml() if self._nvml is not None else self._read_smi()
+        # Nombre total de cartes NVIDIA dans ce cycle : determine ici, une fois pour
+        # toutes les lignes, plutot que dans chaque source de lecture.
+        total = len(rows)
         readings: list[Reading] = []
         for row in rows:
+            row["count"] = float(total)
             readings.extend(self._to_readings(row))
         return readings
 
@@ -175,22 +194,33 @@ class NvidiaBackend(SensorBackend):
         prefix = f"gpu.{index}"
         common = {"group": Group.GPU, "source": self.name, "extra": {"device": name}}
 
+        # L'index vient de NVML/nvidia-smi, qui ne numerote que les cartes NVIDIA :
+        # sur une machine avec un GPU integre (Intel/AMD) en plus du GPU dedie, cet
+        # index ne correspond pas forcement au "GPU 0"/"GPU 1" du Gestionnaire des
+        # taches Windows, qui compte lui tous les adaptateurs. Avec une seule carte
+        # NVIDIA (le cas courant), afficher son nom plutot qu'un index evite toute
+        # ambiguite ; avec plusieurs, l'index reste necessaire pour les distinguer
+        # entre elles (deux cartes identiques n'ont pas de nom qui les differencie).
+        total = int(row.get("count") or 1)
+        court = _nom_court(name)
+        etiquette = court if total <= 1 else f"{court} #{index}"
+
         specs: list[tuple[str, str, float | None, str, Kind, float | None, float | None]] = [
-            (f"{prefix}.load", f"GPU {index} charge", row.get("utilization.gpu"), "%",
+            (f"{prefix}.load", f"{etiquette} charge", row.get("utilization.gpu"), "%",
              Kind.LOAD, 0.0, 100.0),
-            (f"{prefix}.temp", f"GPU {index} temperature", row.get("temperature.gpu"), "°C",
+            (f"{prefix}.temp", f"{etiquette} temperature", row.get("temperature.gpu"), "°C",
              Kind.TEMPERATURE, None, 95.0),
-            (f"{prefix}.fan", f"GPU {index} ventilateur", row.get("fan.speed"), "%",
+            (f"{prefix}.fan", f"{etiquette} ventilateur", row.get("fan.speed"), "%",
              Kind.LOAD, 0.0, 100.0),
-            (f"{prefix}.vram.used", f"GPU {index} VRAM", row.get("memory.used"), "MiB",
+            (f"{prefix}.vram.used", f"{etiquette} VRAM", row.get("memory.used"), "MiB",
              Kind.MEMORY, 0.0, vram_total),
-            (f"{prefix}.vram.load", f"GPU {index} bus memoire", row.get("utilization.memory"), "%",
+            (f"{prefix}.vram.load", f"{etiquette} bus memoire", row.get("utilization.memory"), "%",
              Kind.LOAD, 0.0, 100.0),
-            (f"{prefix}.power", f"GPU {index} consommation", row.get("power.draw"), "W",
+            (f"{prefix}.power", f"{etiquette} consommation", row.get("power.draw"), "W",
              Kind.POWER, 0.0, power_limit),
-            (f"{prefix}.clock.core", f"GPU {index} frequence", row.get("clocks.current.graphics"),
+            (f"{prefix}.clock.core", f"{etiquette} frequence", row.get("clocks.current.graphics"),
              "MHz", Kind.FREQUENCY, 0.0, None),
-            (f"{prefix}.clock.mem", f"GPU {index} frequence VRAM", row.get("clocks.current.memory"),
+            (f"{prefix}.clock.mem", f"{etiquette} frequence VRAM", row.get("clocks.current.memory"),
              "MHz", Kind.FREQUENCY, 0.0, None),
         ]
 

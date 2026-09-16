@@ -263,7 +263,7 @@ chacun une cle dediee, affichee par defaut dans l'overlay :
 
 | Cle | Composant | Source |
 | --- | --- | --- |
-| `cpu.power` | processeur | powercap/RAPL sous Linux, LibreHardwareMonitor sous Windows |
+| `cpu.temp` / `cpu.power` | processeur | hwmon+RAPL sous Linux, LibreHardwareMonitor sous Windows |
 | `gpu.N.power` | carte graphique | NVML/`nvidia-smi`, sysfs `amdgpu`, LibreHardwareMonitor |
 
 Sous Linux, `cpu.power` se decline en `cpu.power.core`, `cpu.power.uncore` et
@@ -293,9 +293,27 @@ comme pleine echelle de la jauge. Une seule ligne de configuration couvre donc l
 deux fabricants. Il en va de meme pour `gpu.N.load`, `gpu.N.temp`, `gpu.N.fan` et
 `gpu.N.vram.used`. Seule exception : un GPU AMD **sous Windows** passe par
 LibreHardwareMonitor et garde des cles `lhm.*` propres a la machine, que
-`overlay sensors` vous donnera. Il en va de meme pour `cpu.power` sous Windows :
-LibreHardwareMonitor le publie sous une cle `lhm.*` qui contient le modele du
-processeur.
+`overlay sensors` vous donnera.
+
+**`cpu.temp` et `cpu.power` fonctionnent aussi sous Windows.** LibreHardwareMonitor
+nomme sa sonde processeur d'apres le modele exact de la puce (« Core (Tctl/Tdie) »
+chez AMD, « CPU Package » chez Intel...), ce qui rend son intitule imprevisible
+d'une machine a l'autre. Overlay reconnait ces intitules — verifies contre le code
+source de LibreHardwareMonitor, pas devines — et republie la bonne sonde (celle du
+processeur entier, jamais un coeur ni un CCD isole) sous les cles stables
+`cpu.temp`/`cpu.power`, en plus de sa cle `lhm.*` d'origine que `overlay sensors`
+continue d'afficher pour le detail complet.
+
+**L'index d'un GPU NVIDIA ne correspond pas forcement au numero que lui donne
+Windows.** NVML/`nvidia-smi` ne numerotent que les cartes NVIDIA : avec un seul
+GPU dedie, il porte toujours l'index 0 pour ces outils, meme si le Gestionnaire
+des taches Windows — qui compte lui tous les adaptateurs, GPU integre compris —
+l'appelle « GPU 1 ». Pour lever toute ambiguite, l'etiquette affichee reprend le
+modele de la carte plutot qu'un numero (« RTX 4070 » au lieu de « GPU 0 ») des
+qu'une seule carte NVIDIA est presente ; avec plusieurs cartes identiques, ou
+l'index redevient la seule facon de les distinguer, il est ajoute en suffixe
+(« RTX 4090 #0 », « RTX 4090 #1 »). Les cles (`gpu.0.temp`, `gpu.1.temp`...) ne
+changent pas : seul l'affichage en est different.
 
 Quand plusieurs sources publient la meme cle, la plus precise l'emporte, et les
 temperatures psutil sont automatiquement desactivees des qu'une source dediee est
@@ -406,7 +424,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 248 tests
+python -m pytest -q                  # 264 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

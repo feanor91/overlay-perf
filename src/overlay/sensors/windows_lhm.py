@@ -39,6 +39,24 @@ _GPU_TOKENS = ("gpu", "nvidia", "radeon", "geforce", "intel arc")
 _CPU_TOKENS = ("cpu", "ryzen", "core i", "intel core", "amd fx", "threadripper")
 _STORAGE_TOKENS = ("ssd", "nvme", "hdd", "samsung", "wd ", "crucial", "disk")
 
+# Intitules exacts des sondes "processeur entier" (par opposition aux sondes par
+# coeur ou par CCD), verifies dans le code source de LibreHardwareMonitor : AmdCpu.cs
+# (Amd0FCpu/Amd10Cpu/Amd17Cpu) et IntelCpu.cs. Par ordre de preference : la sonde la
+# plus proche de ce que les autres outils (Ryzen Master, HWiNFO, Intel XTU) appellent
+# "la" temperature ou "la" puissance du processeur passe en premier.
+_CPU_TEMP_GLOBALE = (
+    "CPU Package",  # Intel : temperature du boitier entier.
+    "Core (Tctl/Tdie)",  # AMD Ryzen (Zen 2+) : capteur combine, le plus courant.
+    "Core (Tctl)",  # AMD Ryzen (Zen/Zen+) : cible de regulation des ventilateurs.
+    "Core (Tdie)",  # AMD Ryzen : die reel, legerement sous Tctl.
+    "Core Max",  # Intel, repli : maximum instantane entre coeurs.
+    "Core Average",  # Intel, repli : moyenne entre coeurs.
+)
+_CPU_POWER_GLOBALE = (
+    "CPU Package",  # Intel : somme coeurs + cache + controleur memoire integre.
+    "Package",  # AMD Ryzen : consommation du boitier entier (capteur SMU).
+)
+
 
 def _slug(text: str) -> str:
     out = [c.lower() if c.isalnum() else "_" for c in text.strip()]
@@ -98,7 +116,7 @@ def parse_tree(node: dict[str, Any], source: str = "lhm") -> list[Reading]:
                     kind=kind,
                     maximum=maximum if kind is Kind.TEMPERATURE else None,
                     source=source,
-                    extra={"hardware": hardware, "sensorId": current["SensorId"]},
+                    extra={"hardware": hardware, "sensorId": current["SensorId"], "text": text},
                 )
             )
             return
@@ -120,6 +138,63 @@ def parse_tree(node: dict[str, Any], source: str = "lhm") -> list[Reading]:
             if isinstance(hardware_node, dict):
                 walk(hardware_node, str(hardware_node.get("Text", "")).strip())
     return readings
+
+
+def _sonde_globale(
+    readings: list[Reading], *, kind: Kind, priorite: tuple[str, ...]
+) -> Reading | None:
+    """Repere la sonde "processeur entier" parmi les mesures deja classees CPU.
+
+    Cherche une correspondance exacte sur l'intitule brut de la sonde (le champ
+    `Text` de LibreHardwareMonitor, conserve dans `extra["text"]"), dans l'ordre de
+    `priorite`. Sans correspondance, ne devine rien plutot que de risquer d'aliaser
+    une sonde par coeur ou par CCD, ce qui serait plus trompeur que son absence.
+    """
+    candidats = {
+        r.extra.get("text"): r
+        for r in readings
+        if r.group is Group.CPU and r.kind is kind and r.extra.get("text")
+    }
+    for texte in priorite:
+        if trouve := candidats.get(texte):
+            return trouve
+    return None
+
+
+def _aliaser_cpu(readings: list[Reading], *, source: str) -> list[Reading]:
+    """Ajoute `cpu.temp` et `cpu.power` a cote des cles `lhm.*` d'origine.
+
+    Sans cela, aucune mesure LibreHardwareMonitor ne repond jamais a ces cles :
+    leur intitule depend du modele de processeur (« Core (Tctl/Tdie) », « CPU
+    Package »...), donc aucune configuration par defaut ne peut les cibler
+    directement. `cpu.temp`/`cpu.power` sont les cles attendues par l'overlay et
+    l'application mobile sur toutes les plateformes ; la sonde d'origine reste
+    presente sous sa cle `lhm.*`, pour qui veut le detail complet.
+    """
+    alias: list[Reading] = []
+    plans = (
+        ("cpu.temp", "CPU temperature", "°C", Kind.TEMPERATURE, _CPU_TEMP_GLOBALE),
+        ("cpu.power", "CPU consommation", "W", Kind.POWER, _CPU_POWER_GLOBALE),
+    )
+    for key, label, unit, kind, priorite in plans:
+        origine = _sonde_globale(readings, kind=kind, priorite=priorite)
+        if origine is None or origine.value is None:
+            continue
+        alias.append(
+            Reading(
+                key=key,
+                label=label,
+                value=origine.value,
+                unit=unit,
+                group=Group.CPU,
+                kind=kind,
+                minimum=origine.minimum,
+                maximum=origine.maximum,
+                source=source,
+                extra={"alias_de": origine.key},
+            )
+        )
+    return alias
 
 
 class LibreHardwareMonitorBackend(SensorBackend):
@@ -149,4 +224,6 @@ class LibreHardwareMonitorBackend(SensorBackend):
         data = self._fetch()
         if data is None:
             return []
-        return parse_tree(data, source=self.name)
+        readings = parse_tree(data, source=self.name)
+        readings.extend(_aliaser_cpu(readings, source=self.name))
+        return readings

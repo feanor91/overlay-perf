@@ -68,13 +68,14 @@ d'anormal a l'installation elle-meme. Deux solutions, sans rien reinstaller :
 
 ```bash
 overlay sensors      # ce que votre machine expose reellement
-overlay run          # overlay + serveur mobile
-overlay pair         # QR code a scanner depuis le telephone
+overlay               # overlay + serveur mobile : equivalent a « overlay run »
+overlay pair          # QR code a scanner depuis le telephone
 ```
 
-`overlay run` lance l'overlay et le serveur. `overlay serve` ne lance que le
-serveur (pratique sur une machine sans session graphique), `overlay overlay` ne
-lance que l'affichage local.
+**`overlay` sans rien derriere lance l'overlay et le serveur** — c'est le
+comportement par defaut, `overlay run` est juste la forme explicite du meme
+appel. `overlay serve` ne lance que le serveur (pratique sur une machine sans
+session graphique), `overlay overlay` ne lance que l'affichage local.
 
 Aucun materiel sous la main ? `mock = true` dans la section `[general]` remplace
 tous les capteurs par des valeurs simulees, de quoi regler l'affichage tranquillement.
@@ -525,7 +526,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 291 tests
+python -m pytest -q                  # 292 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

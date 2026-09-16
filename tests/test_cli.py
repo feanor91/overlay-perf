@@ -29,6 +29,20 @@ def test_analyse_des_arguments():
     assert args.command == "serve" and args.port == 9000 and args.verbose == 2
 
 
+def test_aucune_sous_commande_equivaut_a_run(monkeypatch, config_simulee):
+    """« overlay » seul doit lancer overlay + serveur, sans avoir a taper « run »."""
+    from overlay import cli as cli_mod
+
+    appels: list = []
+    monkeypatch.setattr(
+        cli_mod,
+        "commande_run",
+        lambda config, *, overlay, server, args: appels.append((overlay, server)) or 0,
+    )
+    assert main(["--config", str(config_simulee)]) == 0
+    assert appels == [(True, True)]
+
+
 def test_commande_sensors(config_simulee, capsys):
     assert main(["--config", str(config_simulee), "sensors"]) == 0
     sortie = capsys.readouterr().out

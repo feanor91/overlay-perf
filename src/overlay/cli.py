@@ -26,6 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="overlay",
         description="Overlay de monitoring materiel et serveur pour l'application mobile.",
+        epilog="Sans sous-commande, « overlay » equivaut a « overlay run ».",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"overlay {__version__}")
     parser.add_argument("--config", type=Path, help="Chemin du fichier de configuration TOML")
@@ -33,7 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command")
 
-    run = sub.add_parser("run", help="Overlay + serveur mobile (defaut)")
+    run = sub.add_parser(
+        "run", help="Overlay + serveur mobile (le defaut : « overlay » seul suffit)"
+    )
     run.add_argument("--no-overlay", action="store_true", help="Ne pas afficher l'overlay")
     run.add_argument("--no-server", action="store_true", help="Ne pas demarrer le serveur")
 

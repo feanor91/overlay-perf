@@ -25,6 +25,7 @@ DEFAULT_OVERLAY_METRICS: tuple[str, ...] = (
     "fps.frametime",
     "cpu.load",
     "cpu.temp",
+    "cpu.power",
     "temp.coretemp.*",
     "temp.k10temp.*",
     "gpu.0.load",
@@ -61,7 +62,7 @@ class GeneralConfig:
 class SensorsConfig:
     per_core: bool = False
     include_io: bool = True
-    #: Noms de backends a ne pas charger : psutil, hwmon, amdgpu, nvidia, lhm.
+    #: Noms de backends a ne pas charger : psutil, hwmon, rapl, amdgpu, nvidia, lhm.
     disabled: list[str] = field(default_factory=list)
     lhm_url: str = "http://127.0.0.1:8085/data.json"
 

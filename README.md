@@ -3,8 +3,8 @@
 Overlay de monitoring materiel pour le PC, avec une application mobile compagnon.
 
 Affiche en temps reel les images par seconde, les temperatures, les charges CPU et
-GPU, la consommation electrique de la carte graphique, la memoire et les vitesses
-de ventilateur — a l'ecran par-dessus le jeu, et sur le telephone. Chaque mesure peut etre montree ou masquee a la demande, et
+GPU, la consommation electrique du processeur et de la carte graphique, la memoire
+et les vitesses de ventilateur — a l'ecran par-dessus le jeu, et sur le telephone. Chaque mesure peut etre montree ou masquee a la demande, et
 l'overlay entier s'ouvre et se ferme par un raccourci clavier.
 
 ```
@@ -116,6 +116,7 @@ fausser durablement ces centiles.
 | Plateforme | Source | Couverture |
 | --- | --- | --- |
 | Linux | `/sys/class/hwmon` | temperatures CPU/NVMe, vitesses de rotation, rapport PWM, puissances |
+| Linux | powercap / RAPL | **consommation du processeur** : boitier, coeurs, memoire |
 | Linux | sysfs `amdgpu` | GPU AMD : charge, VRAM, temperature, ventilateur, **consommation** |
 | Windows | LibreHardwareMonitor | temperatures, ventilateurs, consommations, frequences |
 | Toutes | NVML / `nvidia-smi` | GPU NVIDIA : charge, temperature, VRAM, ventilateur, **consommation**, frequences |
@@ -129,13 +130,46 @@ Overmlay interroge alors son serveur interne sur `http://127.0.0.1:8085/data.jso
 Sans lui, vous aurez la charge CPU, la memoire et le GPU NVIDIA, mais ni les
 temperatures de la carte mere ni les vitesses de ventilateur.
 
+### Consommation electrique
+
+Les deux composants qui pesent dans la facture et dans la chaleur du boitier ont
+chacun une cle dediee, affichee par defaut dans l'overlay :
+
+| Cle | Composant | Source |
+| --- | --- | --- |
+| `cpu.power` | processeur | powercap/RAPL sous Linux, LibreHardwareMonitor sous Windows |
+| `gpu.N.power` | carte graphique | NVML/`nvidia-smi`, sysfs `amdgpu`, LibreHardwareMonitor |
+
+Sous Linux, `cpu.power` se decline en `cpu.power.core`, `cpu.power.uncore` et
+`cpu.power.dram` quand le processeur expose ces sous-domaines — ce sont des parts
+du total, jamais des supplements. Sur une machine bi-socket, `cpu.power` est la
+somme des boitiers, chacun restant disponible en `cpu.package.N.power`.
+
+**RAPL compte de l'energie, pas une puissance.** Overmlay deduit les watts de la
+variation du compteur entre deux cycles : la toute premiere lecture ne produit donc
+rien, et `overmlay sensors` echantillonne deux fois pour cette raison.
+
+**Ces compteurs sont souvent reserves a root.** Depuis la CVE-2020-8694 — une
+mesure fine de la consommation permet des attaques par canal auxiliaire — la
+plupart des distributions restreignent leur lecture. Overmlay se desactive alors
+proprement en expliquant la marche a suivre plutot que d'afficher un vide. Pour les
+ouvrir :
+
+```bash
+sudo chmod a+r /sys/class/powercap/*/energy_uj   # a refaire au redemarrage
+```
+
+Pour que ce soit permanent, une regle udev est preferable a un `chmod` manuel.
+
 **La consommation de la carte graphique** sort sous la meme cle `gpu.N.power`
 chez NVIDIA et chez AMD, avec la limite de la carte (`power limit` / `power1_cap`)
 comme pleine echelle de la jauge. Une seule ligne de configuration couvre donc les
 deux fabricants. Il en va de meme pour `gpu.N.load`, `gpu.N.temp`, `gpu.N.fan` et
 `gpu.N.vram.used`. Seule exception : un GPU AMD **sous Windows** passe par
 LibreHardwareMonitor et garde des cles `lhm.*` propres a la machine, que
-`overmlay sensors` vous donnera.
+`overmlay sensors` vous donnera. Il en va de meme pour `cpu.power` sous Windows :
+LibreHardwareMonitor le publie sous une cle `lhm.*` qui contient le modele du
+processeur.
 
 Quand plusieurs sources publient la meme cle, la plus precise l'emporte, et les
 temperatures psutil sont automatiquement desactivees des qu'une source dediee est
@@ -176,7 +210,7 @@ opacity = 0.85
 columns = 2                # repartir les lignes sur plusieurs colonnes
 hotkey = "<ctrl>+<alt>+o"  # raccourci global d'affichage
 visible_at_start = true
-metrics = ["fps.current", "cpu.load", "gpu.0.temp", "gpu.0.power", "fan.*"]
+metrics = ["fps.current", "cpu.load", "cpu.power", "gpu.0.temp", "gpu.0.power", "fan.*"]
 
 [server]
 host = "0.0.0.0"           # 127.0.0.1 pour interdire l'acces reseau
@@ -244,7 +278,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 182 tests
+python -m pytest -q                  # 197 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 ```

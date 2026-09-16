@@ -8,6 +8,7 @@ import sys
 from overmlay.sensors.amdgpu import AmdGpuBackend
 from overmlay.sensors.base import SensorBackend
 from overmlay.sensors.linux_hwmon import LinuxHwmonBackend
+from overmlay.sensors.linux_rapl import LinuxRaplBackend
 from overmlay.sensors.mock import MockBackend
 from overmlay.sensors.nvidia import NvidiaBackend
 from overmlay.sensors.psutil_backend import PsutilBackend
@@ -19,6 +20,7 @@ __all__ = [
     "AmdGpuBackend",
     "LibreHardwareMonitorBackend",
     "LinuxHwmonBackend",
+    "LinuxRaplBackend",
     "MockBackend",
     "NvidiaBackend",
     "PsutilBackend",
@@ -65,6 +67,9 @@ def detect_backends(
         if "hwmon" not in disabled and hwmon.available():
             candidates.append(hwmon)
             thermal_source = True
+        rapl = LinuxRaplBackend()
+        if "rapl" not in disabled and rapl.available():
+            candidates.append(rapl)
     elif sys.platform == "win32":
         lhm = LibreHardwareMonitorBackend(lhm_url) if lhm_url else LibreHardwareMonitorBackend()
         if "lhm" not in disabled and lhm.available():

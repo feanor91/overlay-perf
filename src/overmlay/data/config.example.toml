@@ -24,7 +24,7 @@ per_core = false
 # Publier les debits disque et reseau.
 include_io = true
 
-# Backends a ne pas charger : "psutil", "hwmon", "amdgpu", "nvidia", "lhm".
+# Backends a ne pas charger : "psutil", "hwmon", "rapl", "amdgpu", "nvidia", "lhm".
 disabled = []
 
 # Windows uniquement : serveur web interne de LibreHardwareMonitor.
@@ -105,6 +105,7 @@ metrics = [
     "fps.frametime",
     "cpu.load",
     "cpu.temp",
+    "cpu.power",
     "temp.coretemp.*",
     "temp.k10temp.*",
     "gpu.0.load",

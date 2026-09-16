@@ -38,6 +38,8 @@ class MockBackend(SensorBackend):
              Group.CPU, Kind.TEMPERATURE, None, 95.0),
             ("cpu.clock", "Frequence CPU", self._wave(4200, 500, 0.3), "MHz",
              Group.CPU, Kind.FREQUENCY, 800.0, 5200.0),
+            ("cpu.power", "CPU consommation", 22 + cpu_load * 1.05, "W",
+             Group.CPU, Kind.POWER, 0.0, 142.0),
             ("gpu.0.load", "GPU charge", gpu_load, "%", Group.GPU, Kind.LOAD, 0.0, 100.0),
             ("gpu.0.temp", "GPU temperature", 40 + gpu_load * 0.4, "°C",
              Group.GPU, Kind.TEMPERATURE, None, 90.0),

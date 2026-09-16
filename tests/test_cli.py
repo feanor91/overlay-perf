@@ -111,6 +111,9 @@ def test_source_de_trames_absente_ne_bloque_pas():
 def test_runtime_sans_avertissement_par_defaut():
     config = Config()
     config.general.mock = True
+    # Isole des avertissements FPS : "mock" ne dispense pas de la detection de
+    # source de trames, qui a son propre test plus bas.
+    config.fps.mode = "off"
     assert build_runtime(config, need_token=False).warnings == []
 
 
@@ -128,8 +131,24 @@ def test_runtime_porte_les_avertissements_de_detection(monkeypatch):
 
     monkeypatch.setattr(runtime_mod, "detect_backends", detection_simulee)
     config = Config()
+    config.fps.mode = "off"
     runtime = build_runtime(config, need_token=False)
     assert runtime.warnings == ["message de detection"]
+
+
+def test_runtime_porte_les_avertissements_de_source_fps(monkeypatch):
+    """Meme relais que pour la detection de capteurs, cote source de trames.
+
+    C'est le trajet complet reellement emprunte par la CLI : avant ce correctif,
+    ce cas (mode "auto", rien trouve) ne produisait absolument rien, meme en mode
+    verbeux, laissant FPS et 1 % low manquer sans le moindre indice.
+    """
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    config = Config()
+    config.general.mock = True
+    runtime = build_runtime(config, need_token=False)
+    assert len(runtime.warnings) == 1
+    assert "Aucune source de FPS trouvee" in runtime.warnings[0]
 
 
 def test_avertissements_affiches_clairement_sur_la_sortie_d_erreur(capsys):

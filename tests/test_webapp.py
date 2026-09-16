@@ -35,6 +35,17 @@ def scenario(nom: str) -> dict:
     return json.loads(resultat.stdout)
 
 
+def test_formatage_memoire_utilise_sur_total_en_gio():
+    """RAM et VRAM : le meme calcul que cote overlay, verifie separement cote app."""
+    resultat = scenario("formatageMemoire")
+    assert resultat["vramMib"] == "2.4 / 16.0 Go"
+    assert resultat["ramMib"] == "11.5 / 32.0 Go"
+    # Certaines sondes LibreHardwareMonitor annoncent deja leurs valeurs en GiB.
+    assert resultat["dejaEnGio"] == "8.0 / 16.0 Go"
+    assert resultat["versGioMib"] == 16
+    assert resultat["versGioGib"] == 16
+
+
 def test_les_adresses_sont_dedoublonnees_et_nettoyees():
     resultat = scenario("normalisation")
     assert resultat["doublons"] == ["http://a:1"]  # barre finale et espaces ignores

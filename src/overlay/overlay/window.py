@@ -49,9 +49,27 @@ def couleur_valeur(reading: Reading) -> QColor:
     return COULEUR_OK
 
 
+def _gio(valeur: float, unite: str) -> float:
+    """Convertit une mesure memoire en gibioctets, quelle que soit son unite d'origine.
+
+    Les backends n'utilisent pas tous la meme unite (MiB chez psutil/NVML, parfois
+    GiB chez LibreHardwareMonitor selon le type de sonde) : convertir au point
+    d'affichage evite de propager cette variation jusqu'aux backends eux-memes.
+    """
+    return valeur / 1024.0 if unite == "MiB" else valeur
+
+
 def formater_valeur(reading: Reading) -> str:
     if reading.value is None:
         return "—"
+    # RAM et VRAM : "utilise / total" en Gio plutot qu'un chiffre brut en MiB sans
+    # repere, la question qui se pose toujours etant "sur combien ?". Le total vient
+    # du meme champ que la pleine echelle de la jauge (`maximum`), deja renseigne par
+    # les backends ; aucune mesure supplementaire n'est necessaire.
+    if reading.kind is Kind.MEMORY and reading.maximum and reading.value != reading.maximum:
+        utilise = _gio(reading.value, reading.unit)
+        total = _gio(reading.maximum, reading.unit)
+        return f"{utilise:.1f} / {total:.1f} Go"
     valeur = reading.value
     absolu = abs(valeur)
     if absolu >= 1000:

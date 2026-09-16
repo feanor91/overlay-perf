@@ -13,13 +13,38 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
 from overlay.fps.tracker import FrameTimeTracker
-from overlay.sensors.base import to_float
+from overlay.sensors.base import signaler, to_float
 
 log = logging.getLogger(__name__)
+
+#: Sur Windows, PresentMon n'est jamais installe par defaut : sans lui ni journaux
+#: MangoHud (Linux uniquement), le mode "auto" ne trouve silencieusement aucune
+#: source et FPS/1 % low restent vides, sans que rien ne le signale nulle part.
+_AUCUNE_SOURCE_FPS_WINDOWS = (
+    "Aucune source de FPS trouvee : FPS, temps de trame et 1 % low resteront absents.\n"
+    "  1. Installez PresentMon (https://github.com/GameTechDev/PresentMon).\n"
+    "  2. Verifiez qu'il est sur le PATH (« presentmon --version » doit repondre),\n"
+    "     ou indiquez son chemin dans [fps] presentmon_path.\n"
+    "  3. Lancez Overlay en administrateur : PresentMon en a besoin pour suivre les\n"
+    "     evenements de presentation."
+)
+_AUCUNE_SOURCE_FPS_LINUX = (
+    "Aucune source de FPS trouvee : FPS, temps de trame et 1 % low resteront absents.\n"
+    "  1. Installez MangoHud (paquet de votre distribution, ou Flatpak).\n"
+    "  2. Lancez le jeu avec la journalisation active :\n"
+    "     MANGOHUD_CONFIG=output_folder=~/.local/share/overlay/mangohud,autostart_log=1"
+    " mangohud %command%"
+)
+_PRESENTMON_INTROUVABLE = (
+    "PresentMon introuvable : indiquez son chemin dans [fps] presentmon_path, ou "
+    "verifiez qu'il est sur le PATH (« presentmon --version » doit repondre)."
+)
+_MANGOHUD_INTROUVABLE = "Dossier de journaux MangoHud absent : {repertoire}"
 
 #: Colonnes de duree de trame, par ordre de preference (PresentMon v2 puis v1).
 _FRAME_TIME_COLUMNS = ("FrameTime", "msBetweenPresents", "msBetweenDisplayChange")
@@ -256,11 +281,17 @@ def build_frame_source(
     mode: str = "auto",
     presentmon_path: str | None = None,
     mangohud_log_dir: Path | str | None = None,
+    warnings: list[str] | None = None,
 ) -> FrameSource | None:
     """Choisit la source de trames adaptee a la plateforme.
 
     `mode` vaut `auto`, `presentmon`, `mangohud` ou `push` (aucune source locale :
     seules les trames envoyees sur l'API HTTP sont prises en compte).
+
+    `warnings`, si fourni, recoit un message actionnable quand aucune source n'est
+    trouvee. En mode `auto` (le defaut), l'absence de PresentMon comme de MangoHud
+    ne produisait auparavant *aucune* trace, meme dans les journaux verbeux : FPS,
+    temps de trame et 1 % low manquaient alors sans qu'il y ait le moindre indice.
     """
     if mode == "push":
         return None
@@ -269,7 +300,7 @@ def build_frame_source(
         if source.available():
             return source
         if mode == "presentmon":
-            log.warning("PresentMon introuvable : indiquez son chemin dans la configuration.")
+            signaler(log, warnings, _PRESENTMON_INTROUVABLE)
             return None
     if mode in ("auto", "mangohud"):
         directory = mangohud_log_dir or Path.home() / ".local/share/overlay/mangohud"
@@ -277,5 +308,11 @@ def build_frame_source(
         if source.available():
             return source
         if mode == "mangohud":
-            log.warning("Dossier de journaux MangoHud absent : %s", directory)
+            signaler(log, warnings, _MANGOHUD_INTROUVABLE.format(repertoire=directory))
+            return None
+    if mode == "auto":
+        message = (
+            _AUCUNE_SOURCE_FPS_WINDOWS if sys.platform == "win32" else _AUCUNE_SOURCE_FPS_LINUX
+        )
+        signaler(log, warnings, message)
     return None

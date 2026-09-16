@@ -270,3 +270,77 @@ def test_choix_de_la_source_selon_le_mode(tracker, tmp_path):
 def test_presentmon_absent_du_path(tracker, monkeypatch):
     monkeypatch.setattr("shutil.which", lambda _: None)
     assert not PresentMonSource(tracker).available()
+
+
+# --- Avertissements quand aucune source de trames n'est trouvee ------------
+#
+# En mode "auto" (le defaut), l'absence de PresentMon comme de MangoHud ne
+# produisait auparavant aucune trace, meme dans les journaux verbeux : FPS,
+# temps de trame et 1 % low manquaient sans le moindre indice de la raison.
+
+
+def test_mode_explicite_presentmon_absent_avertit(tracker, monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    avertissements: list = []
+    source = build_frame_source(tracker, mode="presentmon", warnings=avertissements)
+    assert source is None
+    assert len(avertissements) == 1
+    assert "PresentMon introuvable" in avertissements[0]
+    assert "presentmon_path" in avertissements[0]
+
+
+def test_mode_explicite_mangohud_absent_avertit(tracker, tmp_path):
+    avertissements: list = []
+    source = build_frame_source(
+        tracker, mode="mangohud", mangohud_log_dir=tmp_path / "absent", warnings=avertissements
+    )
+    assert source is None
+    assert avertissements == [f"Dossier de journaux MangoHud absent : {tmp_path / 'absent'}"]
+
+
+def test_mode_auto_sans_aucune_source_avertit(tracker, monkeypatch, tmp_path):
+    """Le cas reellement silencieux avant ce correctif : rien trouve, rien signale."""
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    avertissements: list = []
+    source = build_frame_source(
+        tracker, mode="auto", mangohud_log_dir=tmp_path / "absent", warnings=avertissements
+    )
+    assert source is None
+    assert len(avertissements) == 1
+    assert "Aucune source de FPS trouvee" in avertissements[0]
+
+
+def test_mode_auto_avertissement_specifique_a_la_plateforme(tracker, monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda _: None)
+
+    monkeypatch.setattr("overlay.fps.sources.sys.platform", "win32")
+    windows: list = []
+    build_frame_source(tracker, mode="auto", mangohud_log_dir=tmp_path / "x", warnings=windows)
+    assert "PresentMon" in windows[0]
+    assert "administrateur" in windows[0]
+
+    monkeypatch.setattr("overlay.fps.sources.sys.platform", "linux")
+    linux: list = []
+    build_frame_source(tracker, mode="auto", mangohud_log_dir=tmp_path / "x", warnings=linux)
+    assert "MangoHud" in linux[0]
+    assert "MANGOHUD_CONFIG" in linux[0]
+
+
+def test_mode_auto_sans_collecte_journalise_sans_lever(tracker, monkeypatch, tmp_path, caplog):
+    """Sans `warnings`, le comportement precedent (log) reste disponible."""
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    with caplog.at_level("INFO"):
+        source = build_frame_source(tracker, mode="auto", mangohud_log_dir=tmp_path / "x")
+    assert source is None
+    assert "Aucune source de FPS trouvee" in caplog.text
+
+
+def test_mode_auto_avec_mangohud_disponible_ne_previent_pas(tracker, monkeypatch, tmp_path):
+    """Une source trouvee, meme la seconde essayee, ne doit rien signaler."""
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    avertissements: list = []
+    source = build_frame_source(
+        tracker, mode="auto", mangohud_log_dir=tmp_path, warnings=avertissements
+    )
+    assert isinstance(source, MangoHudSource)
+    assert avertissements == []

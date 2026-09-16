@@ -6,7 +6,7 @@ import logging
 import sys
 
 from overlay.sensors.amdgpu import AmdGpuBackend
-from overlay.sensors.base import SensorBackend
+from overlay.sensors.base import SensorBackend, signaler
 from overlay.sensors.linux_hwmon import LinuxHwmonBackend
 from overlay.sensors.linux_rapl import LinuxRaplBackend
 from overlay.sensors.mock import MockBackend
@@ -98,7 +98,7 @@ def detect_backends(
             candidates.append(lhm)
             thermal_source = True
         else:
-            _signaler(warnings, _LHM_INDISPONIBLE.format(url=lhm.url))
+            signaler(log, warnings, _LHM_INDISPONIBLE.format(url=lhm.url))
 
     if nvidia_actif:
         candidates.append(nvidia)
@@ -113,19 +113,7 @@ def detect_backends(
         )
 
     if not candidates:
-        _signaler(warnings, _AUCUN_CAPTEUR, niveau=logging.WARNING)
+        signaler(log, warnings, _AUCUN_CAPTEUR, niveau=logging.WARNING)
         candidates.append(MockBackend())
     return candidates
 
-
-def _signaler(warnings: list[str] | None, message: str, *, niveau: int = logging.INFO) -> None:
-    """Route un message vers la liste structuree si fournie, sinon vers les journaux.
-
-    Eviter le doublon est volontaire : un appelant qui recueille `warnings` (la CLI)
-    l'affichera lui-meme clairement, un appelant qui ne le fait pas garde au moins la
-    trace dans les journaux.
-    """
-    if warnings is not None:
-        warnings.append(message)
-    else:
-        log.log(niveau, message)

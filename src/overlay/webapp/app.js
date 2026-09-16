@@ -361,6 +361,11 @@ function majTuile(mesure) {
   if (mesure.value === null || mesure.value === undefined) {
     refs.valeur.className = 'tuile__valeur tuile__absent';
     refs.valeur.textContent = '—';
+  } else if (mesure.kind === 'memory' && mesure.max && mesure.value !== mesure.max) {
+    // RAM et VRAM : "utilise / total" en Gio, deduit de la pleine echelle de la
+    // jauge deja fournie par l'agent (`max`) — aucune mesure supplementaire requise.
+    refs.valeur.className = 'tuile__valeur';
+    refs.valeur.textContent = formaterMemoire(mesure);
   } else {
     refs.valeur.className = 'tuile__valeur';
     refs.valeur.textContent = formaterNombre(mesure.value);
@@ -380,6 +385,18 @@ function formaterNombre(valeur) {
   if (absolu >= 100) return valeur.toFixed(0);
   if (absolu >= 10) return valeur.toFixed(1);
   return valeur.toFixed(absolu < 1 ? 2 : 1);
+}
+
+function versGio(valeur, unite) {
+  // Les backends n'utilisent pas tous la meme unite (MiB chez psutil/NVML, parfois
+  // GiB chez LibreHardwareMonitor selon le type de sonde).
+  return unite === 'MiB' ? valeur / 1024 : valeur;
+}
+
+function formaterMemoire(mesure) {
+  const utilise = versGio(mesure.value, mesure.unit).toFixed(1);
+  const total = versGio(mesure.max, mesure.unit).toFixed(1);
+  return `${utilise} / ${total} Go`;
 }
 
 function majJauge(barre, mesure) {

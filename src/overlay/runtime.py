@@ -69,6 +69,7 @@ def build_runtime(config: Config, *, need_token: bool = True) -> Runtime:
             mangohud_log_dir=Path(config.fps.mangohud_log_dir)
             if config.fps.mangohud_log_dir
             else None,
+            warnings=warnings,
         )
 
     hub = MetricsHub(

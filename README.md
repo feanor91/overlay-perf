@@ -209,6 +209,25 @@ duree de trame. Ce sont eux qui decrivent les saccades que la moyenne masque. Le
 interruptions de flux (alt-tab, ecran de chargement) sont ecartees pour ne pas
 fausser durablement ces centiles.
 
+**En mode `auto` (le defaut), Overlay previent si aucune source n'est trouvee.**
+Sous Windows sans PresentMon installe, ou sous Linux sans journalisation MangoHud
+active, FPS/temps de trame/1 % low restaient auparavant vides sans le moindre
+indice — meme en mode verbose. Au lancement de `overlay run`, `overlay serve` ou
+`overlay overlay`, un avertissement adapte a la plateforme s'affiche desormais :
+
+```
+Attention : Aucune source de FPS trouvee : FPS, temps de trame et 1 % low resteront
+absents.
+  1. Installez PresentMon (https://github.com/GameTechDev/PresentMon).
+  2. Verifiez qu'il est sur le PATH (« presentmon --version » doit repondre),
+     ou indiquez son chemin dans [fps] presentmon_path.
+  3. Lancez Overlay en administrateur : PresentMon en a besoin pour suivre les
+     evenements de presentation.
+```
+
+Passer `[fps] mode` a `"off"` desactive completement le suivi FPS, y compris cet
+avertissement.
+
 ### Temperatures, ventilateurs, charges
 
 | Plateforme | Source | Couverture |
@@ -314,6 +333,12 @@ qu'une seule carte NVIDIA est presente ; avec plusieurs cartes identiques, ou
 l'index redevient la seule facon de les distinguer, il est ajoute en suffixe
 (« RTX 4090 #0 », « RTX 4090 #1 »). Les cles (`gpu.0.temp`, `gpu.1.temp`...) ne
 changent pas : seul l'affichage en est different.
+
+**La RAM et la VRAM s'affichent « utilise / total »**, en Gio plutot qu'un chiffre
+brut en MiB sans repere (`gpu.0.vram.used` : « 2.4 / 16.0 Go », `memory.used` :
+« 11.5 / 32.0 Go »), sur l'overlay comme sur l'application mobile. Le total vient
+de la meme information que la pleine echelle de la jauge, deja fournie par les
+backends : aucune mesure supplementaire n'est necessaire pour ca.
 
 Quand plusieurs sources publient la meme cle, la plus precise l'emporte, et les
 temperatures psutil sont automatiquement desactivees des qu'une source dediee est
@@ -424,7 +449,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 264 tests
+python -m pytest -q                  # 276 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

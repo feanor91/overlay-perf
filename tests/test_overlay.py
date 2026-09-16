@@ -37,6 +37,38 @@ def test_mise_en_forme_des_valeurs(valeur, attendu):
     assert formater_valeur(reading("x", valeur)) == attendu
 
 
+# --- RAM et VRAM : "utilise / total" plutot qu'un chiffre brut sans repere -
+
+
+def test_memoire_affiche_utilise_sur_total_en_gio():
+    vram = reading(
+        "gpu.0.vram.used", 2447.0, unit="MiB", kind=Kind.MEMORY, minimum=0.0, maximum=16384.0
+    )
+    assert formater_valeur(vram) == "2.4 / 16.0 Go"
+
+
+def test_memoire_convertit_depuis_gio_sans_double_conversion():
+    """LibreHardwareMonitor annonce certaines sondes memoire directement en GiB."""
+    vram = reading(
+        "gpu.0.vram.used", 8.0, unit="GiB", kind=Kind.MEMORY, minimum=0.0, maximum=16.0
+    )
+    assert formater_valeur(vram) == "8.0 / 16.0 Go"
+
+
+def test_memoire_sans_total_connu_retombe_sur_le_format_brut():
+    """Sans `maximum`, rien pour calculer un total : le chiffre brut reste affiche."""
+    vram = reading("gpu.0.vram.used", 2447.0, unit="MiB", kind=Kind.MEMORY)
+    assert formater_valeur(vram) == "2 447 MiB"
+
+
+def test_memoire_totale_ne_s_affiche_pas_comme_utilise_sur_total():
+    """value == maximum (la sonde memoire.total elle-meme) : pas de doublon absurde."""
+    total = reading(
+        "memory.total", 32768.0, unit="MiB", kind=Kind.MEMORY, minimum=0.0, maximum=32768.0
+    )
+    assert formater_valeur(total) == "32 768 MiB"
+
+
 @pytest.mark.parametrize(
     ("valeur", "couleur"),
     [(30.0, COULEUR_OK), (70.0, COULEUR_TIEDE), (95.0, COULEUR_CHAUD)],

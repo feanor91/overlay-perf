@@ -32,7 +32,7 @@ DEFAULT_OVERLAY_METRICS: tuple[str, ...] = (
     "gpu.0.temp",
     "gpu.0.power",
     "gpu.0.vram.used",
-    "memory.load",
+    "memory.used",
     "fan.*",
 )
 

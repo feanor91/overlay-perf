@@ -78,6 +78,26 @@ def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
+def signaler(
+    logger: logging.Logger,
+    warnings: list[str] | None,
+    message: str,
+    *,
+    niveau: int = logging.INFO,
+) -> None:
+    """Route un message vers la liste structuree si fournie, sinon vers les journaux.
+
+    Utilise par les modules de detection (capteurs, source FPS) : `warnings`, quand
+    la CLI le fournit, recueille un diagnostic actionnable qu'elle affiche clairement
+    au demarrage plutot que de laisser une mesure manquer sans explication. Un
+    appelant qui ne le fournit pas garde au moins la trace dans ses propres journaux.
+    """
+    if warnings is not None:
+        warnings.append(message)
+    else:
+        logger.log(niveau, message)
+
+
 def to_float(raw: Any) -> float | None:
     """Convertit une valeur brute de capteur en float, ou `None` si illisible.
 

@@ -2,6 +2,17 @@
 import { chargerApp } from './harness.mjs';
 
 const scenarios = {
+  formatageMemoire() {
+    const { api } = chargerApp();
+    return {
+      vramMib: api.formaterMemoire({ value: 2447, max: 16384, unit: 'MiB' }),
+      ramMib: api.formaterMemoire({ value: 11796, max: 32768, unit: 'MiB' }),
+      dejaEnGio: api.formaterMemoire({ value: 8, max: 16, unit: 'GiB' }),
+      versGioMib: api.versGio(16384, 'MiB'),
+      versGioGib: api.versGio(16, 'GiB'),
+    };
+  },
+
   normalisation() {
     const { api } = chargerApp();
     return {

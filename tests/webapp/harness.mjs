@@ -119,6 +119,9 @@ export function chargerApp({ origin = 'http://192.168.1.42:8777', stockage = {},
       normaliserAdresses,
       adresseWebSocket,
       connecter,
+      versGio,
+      formaterMemoire,
+      formaterNombre,
       elements,
     };
   `;

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from overmlay.models import Group, Kind, Reading
-from overmlay.sensors.base import SensorBackend
+from overlay.models import Group, Kind, Reading
+from overlay.sensors.base import SensorBackend
 
 
 class StaticBackend(SensorBackend):

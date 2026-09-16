@@ -106,4 +106,4 @@ jobs:
       - name: Les icones du paquet sont a jour
         run: |
           python tools/make_icons.py
-          git diff --exit-code -- src/overmlay/webapp
+          git diff --exit-code -- src/overlay/webapp

@@ -2,16 +2,16 @@ import time
 
 import pytest
 
-from overmlay.hub import merge_readings
-from overmlay.models import Group, Kind
-from overmlay.sensors import detect_backends
-from overmlay.sensors.amdgpu import AmdGpuBackend
-from overmlay.sensors.base import SensorBackend, to_float
-from overmlay.sensors.linux_hwmon import LinuxHwmonBackend
-from overmlay.sensors.mock import MockBackend
-from overmlay.sensors.nvidia import NvidiaBackend, parse_smi_csv
-from overmlay.sensors.psutil_backend import PsutilBackend
-from overmlay.sensors.windows_lhm import parse_tree
+from overlay.hub import merge_readings
+from overlay.models import Group, Kind
+from overlay.sensors import detect_backends
+from overlay.sensors.amdgpu import AmdGpuBackend
+from overlay.sensors.base import SensorBackend, to_float
+from overlay.sensors.linux_hwmon import LinuxHwmonBackend
+from overlay.sensors.mock import MockBackend
+from overlay.sensors.nvidia import NvidiaBackend, parse_smi_csv
+from overlay.sensors.psutil_backend import PsutilBackend
+from overlay.sensors.windows_lhm import parse_tree
 
 
 @pytest.mark.parametrize(
@@ -450,7 +450,7 @@ def test_une_horloge_grossiere_ne_fait_pas_disparaitre_les_debits(monkeypatch):
     """
     instant = [1000.0]
     monkeypatch.setattr(
-        "overmlay.sensors.psutil_backend.time.monotonic", lambda: instant[0]
+        "overlay.sensors.psutil_backend.time.monotonic", lambda: instant[0]
     )
     backend = PsutilBackend(include_io=True, include_thermals=False)
     backend.read()  # pose la reference

@@ -1,11 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from overmlay.fps.tracker import FrameTimeTracker
-from overmlay.hub import MetricsHub
-from overmlay.server.app import create_app
-from overmlay.server.auth import extract_token, token_matches
-from overmlay.server.pairing import local_ip_addresses, pairing_url, render_qr
+from overlay.fps.tracker import FrameTimeTracker
+from overlay.hub import MetricsHub
+from overlay.server.app import create_app
+from overlay.server.auth import extract_token, token_matches
+from overlay.server.pairing import local_ip_addresses, pairing_url, render_qr
 from tests.helpers import StaticBackend, reading
 
 JETON = "jeton-de-test"
@@ -44,7 +44,7 @@ def entetes():
     [
         ({"Authorization": "Bearer abc"}, {}, "abc"),
         ({"authorization": "bearer abc"}, {}, "abc"),
-        ({"X-Overmlay-Token": "def"}, {}, "def"),
+        ({"X-Overlay-Token": "def"}, {}, "def"),
         ({}, {"token": "ghi"}, "ghi"),
         ({}, {}, None),
         ({"Authorization": "Bearer "}, {}, None),
@@ -66,7 +66,7 @@ def test_comparaison_du_jeton():
 
 def test_sonde_de_sante_publique(client):
     corps = client.get("/api/health").json()
-    assert corps["service"] == "overmlay"
+    assert corps["service"] == "overlay"
     assert corps["auth_required"] is True
 
 
@@ -82,7 +82,7 @@ def test_routes_protegees(client, chemin):
     ("entetes", "requete"),
     [
         ({"Authorization": f"Bearer {JETON}"}, ""),
-        ({"X-Overmlay-Token": JETON}, ""),
+        ({"X-Overlay-Token": JETON}, ""),
         ({}, f"?token={JETON}"),
     ],
 )
@@ -197,7 +197,7 @@ def test_deconnexion_libere_l_abonnement(client):
 def test_la_page_est_servie(client):
     reponse = client.get("/")
     assert reponse.status_code == 200
-    assert "Overmlay" in reponse.text
+    assert "Overlay" in reponse.text
 
 
 @pytest.mark.parametrize(

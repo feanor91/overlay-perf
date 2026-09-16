@@ -111,7 +111,7 @@ export function chargerApp({ origin = 'http://192.168.1.42:8777', stockage = {},
   };
 
   createContext(contexte);
-  const source = readFileSync(new URL('../../src/overmlay/webapp/app.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../src/overlay/webapp/app.js', import.meta.url), 'utf8');
   const epilogue = `
     globalThis.__test = {
       get etat() { return etat; },

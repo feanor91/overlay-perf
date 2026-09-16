@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from overmlay.hub import MetricsHub, merge_readings
-from overmlay.models import Group, Snapshot
+from overlay.hub import MetricsHub, merge_readings
+from overlay.models import Group, Snapshot
 from tests.helpers import BrokenBackend, StaticBackend, reading
 
 

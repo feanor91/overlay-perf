@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from overmlay.config import Config, ConfigError, load_config, resolve_token, rotate_token
-from overmlay.hub import MetricsHub
-from overmlay.server.app import WS_POLICY_VIOLATION, WS_TRY_LATER, create_app
-from overmlay.server.auth import AuthThrottle, client_address
-from overmlay.server.pairing import pairing_summary, pairing_url, with_token
+from overlay.config import Config, ConfigError, load_config, resolve_token, rotate_token
+from overlay.hub import MetricsHub
+from overlay.server.app import WS_POLICY_VIOLATION, WS_TRY_LATER, create_app
+from overlay.server.auth import AuthThrottle, client_address
+from overlay.server.pairing import pairing_summary, pairing_url, with_token
 from tests.helpers import StaticBackend, reading
 
 JETON = "jeton-de-test"
@@ -245,7 +245,7 @@ def test_jeton_ajoute_a_une_url_de_tunnel():
 
 
 def test_rotation_du_jeton(tmp_path, monkeypatch):
-    monkeypatch.setattr("overmlay.config.data_path", lambda: tmp_path)
+    monkeypatch.setattr("overlay.config.data_path", lambda: tmp_path)
     config = Config()
     premier = resolve_token(config)
     nouveau = rotate_token(config)

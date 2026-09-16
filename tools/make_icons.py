@@ -12,7 +12,7 @@ from pathlib import Path
 
 FOND = (11, 15, 23, 255)
 BARRES = ((77, 163, 255, 255), (61, 220, 132, 255), (245, 181, 69, 255))
-DESTINATION = Path(__file__).resolve().parent.parent / "src" / "overmlay" / "webapp"
+DESTINATION = Path(__file__).resolve().parent.parent / "src" / "overlay" / "webapp"
 
 
 def png_bytes(width: int, height: int, pixels: list[list[tuple[int, int, int, int]]]) -> bytes:

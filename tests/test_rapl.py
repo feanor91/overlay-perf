@@ -10,8 +10,8 @@ import time
 
 import pytest
 
-from overmlay.models import Group, Kind
-from overmlay.sensors.linux_rapl import LinuxRaplBackend
+from overlay.models import Group, Kind
+from overlay.sensors.linux_rapl import LinuxRaplBackend
 
 pytestmark = pytest.mark.skipif(
     not sys.platform.startswith("linux"),

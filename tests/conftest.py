@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from overmlay.fps.tracker import FrameTimeTracker
-from overmlay.hub import MetricsHub
-from overmlay.sensors.mock import MockBackend
+from overlay.fps.tracker import FrameTimeTracker
+from overlay.hub import MetricsHub
+from overlay.sensors.mock import MockBackend
 
 
 @pytest.fixture

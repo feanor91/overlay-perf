@@ -26,7 +26,7 @@ const scenarios = {
   migrationAncienFormat() {
     const { api } = chargerApp({
       stockage: {
-        'overmlay.reglages': JSON.stringify({ url: 'http://192.168.1.42:8777', token: 'vieux' }),
+        'overlay.reglages': JSON.stringify({ url: 'http://192.168.1.42:8777', token: 'vieux' }),
       },
     });
     return { urls: api.reglages.urls, token: api.reglages.token };
@@ -37,20 +37,20 @@ const scenarios = {
       origin: 'https://pc.exemple.fr',
       hash: '#token=nouveau',
       stockage: {
-        'overmlay.reglages': JSON.stringify({ urls: ['http://192.168.1.42:8777'], token: 'ancien' }),
+        'overlay.reglages': JSON.stringify({ urls: ['http://192.168.1.42:8777'], token: 'ancien' }),
       },
     });
     return {
       urls: api.reglages.urls,
       token: api.reglages.token,
-      persiste: JSON.parse(magasin.get('overmlay.reglages')),
+      persiste: JSON.parse(magasin.get('overlay.reglages')),
     };
   },
 
   basculeVersLAdresseDistante() {
     const app = chargerApp({
       stockage: {
-        'overmlay.reglages': JSON.stringify({
+        'overlay.reglages': JSON.stringify({
           urls: ['http://192.168.1.42:8777', 'https://pc.exemple.fr'],
           token: 'jeton',
         }),
@@ -76,7 +76,7 @@ const scenarios = {
   reculExponentielApresUnTourComplet() {
     const app = chargerApp({
       stockage: {
-        'overmlay.reglages': JSON.stringify({
+        'overlay.reglages': JSON.stringify({
           urls: ['http://local:8777', 'https://distant'],
           token: 'jeton',
         }),
@@ -93,7 +93,7 @@ const scenarios = {
   jetonRefuseNeBoucle() {
     const app = chargerApp({
       stockage: {
-        'overmlay.reglages': JSON.stringify({ urls: ['http://local:8777'], token: 'faux' }),
+        'overlay.reglages': JSON.stringify({ urls: ['http://local:8777'], token: 'faux' }),
       },
     });
     app.dernierSocket().fermer(1008); // refus applicatif de l'agent
@@ -107,7 +107,7 @@ const scenarios = {
   adresseInvalidePasseALaSuivante() {
     const app = chargerApp({
       stockage: {
-        'overmlay.reglages': JSON.stringify({
+        'overlay.reglages': JSON.stringify({
           urls: ['mon-pc-mal-saisi', 'https://pc.exemple.fr'],
           token: 'jeton',
         }),
@@ -127,7 +127,7 @@ const scenarios = {
   uneSeuleAdresseNAffichePasDEtiquette() {
     const app = chargerApp({
       stockage: {
-        'overmlay.reglages': JSON.stringify({ urls: ['http://local:8777'], token: 'jeton' }),
+        'overlay.reglages': JSON.stringify({ urls: ['http://local:8777'], token: 'jeton' }),
       },
     });
     app.dernierSocket().ouvrir();

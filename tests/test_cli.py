@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from overmlay.cli import build_parser, main
-from overmlay.config import Config
-from overmlay.runtime import build_runtime
+from overlay.cli import build_parser, main
+from overlay.config import Config
+from overlay.runtime import build_runtime
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from overmlay.models import DEFAULT_RANGES, GAUGE_KINDS, Group, Kind, Reading, Snapshot
+from overlay.models import DEFAULT_RANGES, GAUGE_KINDS, Group, Kind, Reading, Snapshot
 from tests.helpers import reading
 
 

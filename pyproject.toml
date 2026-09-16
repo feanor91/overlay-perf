@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "overmlay"
+name = "overlay"
 version = "0.1.0"
 description = "Overlay de monitoring materiel (FPS, temperatures, CPU/GPU/RAM, ventilateurs) avec application mobile compagnon."
 readme = "README.md"
@@ -39,11 +39,11 @@ overlay = [
     "pynput>=1.7",
 ]
 all = [
-    "overmlay[server]",
-    "overmlay[overlay]",
+    "overlay[server]",
+    "overlay[overlay]",
 ]
 dev = [
-    "overmlay[server]",
+    "overlay[server]",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
@@ -51,17 +51,17 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/feanor91/overmlay-perf"
-Issues = "https://github.com/feanor91/overmlay-perf/issues"
+Homepage = "https://github.com/feanor91/overlay-perf"
+Issues = "https://github.com/feanor91/overlay-perf/issues"
 
 [project.scripts]
-overmlay = "overmlay.cli:main"
+overlay = "overlay.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-overmlay = ["webapp/*", "webapp/**/*", "data/*.toml"]
+overlay = ["webapp/*", "webapp/**/*", "data/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

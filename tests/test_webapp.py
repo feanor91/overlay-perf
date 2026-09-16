@@ -105,7 +105,7 @@ def test_un_jeton_refuse_ne_declenche_pas_de_boucle():
     resultat = scenario("jetonRefuseNeBoucle")
     assert resultat["reconnexionsProgrammees"] == 0
     assert resultat["etat"] == "Jeton refuse"
-    assert "overmlay pair" in resultat["messageAffiche"]
+    assert "overlay pair" in resultat["messageAffiche"]
 
 
 def test_pas_d_etiquette_avec_une_seule_adresse():

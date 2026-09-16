@@ -1,6 +1,7 @@
 # Overlay
 
-Overlay de monitoring materiel pour le PC, avec une application mobile compagnon.
+Monitoring materiel du PC affiche par-dessus le jeu, avec une application
+mobile compagnon.
 
 Affiche en temps reel les images par seconde, les temperatures, les charges CPU et
 GPU, la consommation electrique du processeur et de la carte graphique, la memoire
@@ -9,7 +10,7 @@ l'overlay entier s'ouvre et se ferme par un raccourci clavier.
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Agent Overlay (Python, sur le PC)          │
+│  Agent Overlay (Python, sur le PC)           │
 │                                              │
 │  capteurs ──► hub ──┬──► overlay Qt          │   ← a l'ecran, par-dessus le jeu
 │  (hwmon, NVML,      │                        │
@@ -28,8 +29,8 @@ montre le telephone sont toujours coherents.
 Python 3.10 ou plus recent.
 
 ```bash
-git clone https://github.com/feanor91/Overlay-perf
-cd Overlay-perf
+git clone https://github.com/feanor91/overlay-perf
+cd overlay-perf
 pip install ".[all]"
 ```
 
@@ -37,7 +38,7 @@ Les extras se choisissent separement si besoin :
 
 | Extra | Contenu | Necessaire pour |
 | --- | --- | --- |
-| *(aucun)* | psutil, platformdirs | lire les capteurs, `Overlay sensors` |
+| *(aucun)* | psutil, platformdirs | lire les capteurs, `overlay sensors` |
 | `server` | FastAPI, uvicorn, qrcode | l'application mobile |
 | `overlay` | PySide6, pynput | l'affichage a l'ecran et le raccourci global |
 | `all` | les deux | l'usage courant |
@@ -46,13 +47,13 @@ Les extras se choisissent separement si besoin :
 ## Demarrage rapide
 
 ```bash
-Overlay sensors      # ce que votre machine expose reellement
-Overlay run          # overlay + serveur mobile
-Overlay pair         # QR code a scanner depuis le telephone
+overlay sensors      # ce que votre machine expose reellement
+overlay run          # overlay + serveur mobile
+overlay pair         # QR code a scanner depuis le telephone
 ```
 
-`Overlay run` lance l'overlay et le serveur. `Overlay serve` ne lance que le
-serveur (pratique sur une machine sans session graphique), `Overlay overlay` ne
+`overlay run` lance l'overlay et le serveur. `overlay serve` ne lance que le
+serveur (pratique sur une machine sans session graphique), `overlay overlay` ne
 lance que l'affichage local.
 
 Aucun materiel sous la main ? `mock = true` dans la section `[general]` remplace
@@ -64,7 +65,7 @@ tous les capteurs par des valeurs simulees, de quoi regler l'affichage tranquill
 Il n'y a rien a installer depuis un magasin d'applications : l'agent sert lui-meme
 une application web installable (PWA).
 
-1. Sur le PC : `Overlay pair`, qui affiche une adresse et un QR code.
+1. Sur le PC : `overlay pair`, qui affiche une adresse et un QR code.
 2. Sur le telephone, connecte au **meme reseau local**, scannez le QR code ou
    saisissez l'adresse.
 3. « Ajouter a l'ecran d'accueil » depuis le menu du navigateur : l'application
@@ -159,7 +160,7 @@ idealement, un port non standard. Overlay vous avertit au demarrage si
   l'adresse du tunnel et un seul attaquant verrouillerait tout le monde. Cette
   en-tete n'est **jamais** lue sans cette option : elle est triviale a forger, et
   la croire permettrait d'echapper au verrou en changeant de valeur a chaque essai.
-- **Rotation du jeton.** `Overlay pair --rotate` en genere un nouveau et
+- **Rotation du jeton.** `overlay pair --rotate` en genere un nouveau et
   invalide les telephones deja appaires. A faire au moindre doute.
 
 
@@ -181,7 +182,7 @@ Overlay ne s'injecte dans aucun jeu. Trois sources, selectionnees par
 Cote MangoHud, lancez le jeu en journalisant :
 
 ```bash
-MANGOHUD_CONFIG=output_folder=~/.local/share/Overlay/mangohud,autostart_log=1 mangohud %command%
+MANGOHUD_CONFIG=output_folder=~/.local/share/overlay/mangohud,autostart_log=1 mangohud %command%
 ```
 
 Outre le FPS moyen, Overlay publie le temps de trame et les centiles bas
@@ -226,7 +227,7 @@ somme des boitiers, chacun restant disponible en `cpu.package.N.power`.
 
 **RAPL compte de l'energie, pas une puissance.** Overlay deduit les watts de la
 variation du compteur entre deux cycles : la toute premiere lecture ne produit donc
-rien, et `Overlay sensors` echantillonne deux fois pour cette raison.
+rien, et `overlay sensors` echantillonne deux fois pour cette raison.
 
 **Ces compteurs sont souvent reserves a root.** Depuis la CVE-2020-8694 — une
 mesure fine de la consommation permet des attaques par canal auxiliaire — la
@@ -246,7 +247,7 @@ comme pleine echelle de la jauge. Une seule ligne de configuration couvre donc l
 deux fabricants. Il en va de meme pour `gpu.N.load`, `gpu.N.temp`, `gpu.N.fan` et
 `gpu.N.vram.used`. Seule exception : un GPU AMD **sous Windows** passe par
 LibreHardwareMonitor et garde des cles `lhm.*` propres a la machine, que
-`Overlay sensors` vous donnera. Il en va de meme pour `cpu.power` sous Windows :
+`overlay sensors` vous donnera. Il en va de meme pour `cpu.power` sous Windows :
 LibreHardwareMonitor le publie sous une cle `lhm.*` qui contient le modele du
 processeur.
 
@@ -258,25 +259,25 @@ n'apparait donc qu'une fois. Sur une machine hybride, les cartes AMD sont
 numerotees a la suite des cartes NVIDIA, pour que les deux ne se disputent pas
 `gpu.0`.
 
-`Overlay sensors` liste les cles reellement disponibles sur votre machine ; ce
+`overlay sensors` liste les cles reellement disponibles sur votre machine ; ce
 sont elles qu'on met dans `[overlay] metrics`.
 
 
 ## Configuration
 
 ```bash
-Overlay config --init   # cree le fichier a partir du modele commente
-Overlay config --path   # affiche son emplacement
+overlay config --init   # cree le fichier a partir du modele commente
+overlay config --path   # affiche son emplacement
 ```
 
 Le fichier vit dans le repertoire de configuration de l'utilisateur
-(`~/.config/Overlay/config.toml` sous Linux,
-`%LOCALAPPDATA%\Overlay\config.toml` sous Windows) ; `--config` accepte un autre
+(`~/.config/overlay/config.toml` sous Linux,
+`%LOCALAPPDATA%\overlay\config.toml` sous Windows) ; `--config` accepte un autre
 chemin. Toute option omise garde sa valeur par defaut, et une valeur invalide est
 refusee au demarrage avec un message explicite plutot qu'en cours de route.
 
 Le modele complet et commente se trouve dans
-[`src/Overlay/data/config.example.toml`](src/Overlay/data/config.example.toml).
+[`src/overlay/data/config.example.toml`](src/overlay/data/config.example.toml).
 Les reglages les plus utiles :
 
 ```toml
@@ -385,13 +386,13 @@ Organisation du code :
 
 | Chemin | Role |
 | --- | --- |
-| `src/Overlay/models.py` | `Reading` et `Snapshot`, le vocabulaire partage par tout le reste |
-| `src/Overlay/sensors/` | Un module par source materielle, plus la detection automatique |
-| `src/Overlay/fps/` | Calcul des metriques de fluidite et sources de trames |
-| `src/Overlay/hub.py` | Boucle d'echantillonnage et diffusion aux abonnes |
-| `src/Overlay/server/` | API HTTP/WebSocket, jeton, appairage |
-| `src/Overlay/webapp/` | L'application mobile (HTML/CSS/JS, sans dependance) |
-| `src/Overlay/overlay/` | Fenetre Qt et raccourci global |
+| `src/overlay/models.py` | `Reading` et `Snapshot`, le vocabulaire partage par tout le reste |
+| `src/overlay/sensors/` | Un module par source materielle, plus la detection automatique |
+| `src/overlay/fps/` | Calcul des metriques de fluidite et sources de trames |
+| `src/overlay/hub.py` | Boucle d'echantillonnage et diffusion aux abonnes |
+| `src/overlay/server/` | API HTTP/WebSocket, jeton, appairage |
+| `src/overlay/webapp/` | L'application mobile (HTML/CSS/JS, sans dependance) |
+| `src/overlay/overlay/` | Fenetre Qt et raccourci global |
 
 Ajouter une source de capteurs revient a implementer `SensorBackend` (`available()`
 et `read()`) puis a la declarer dans `detect_backends()` : l'overlay, l'API et

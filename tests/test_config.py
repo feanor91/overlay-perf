@@ -1,6 +1,6 @@
 import pytest
 
-from overmlay.config import (
+from overlay.config import (
     DEFAULT_OVERLAY_METRICS,
     Config,
     ConfigError,
@@ -28,13 +28,13 @@ def test_les_consommations_sont_affichees_par_defaut(cle):
     assert cle in DEFAULT_OVERLAY_METRICS
     assert cle in Config().overlay.metrics
 
-    from overmlay.cli import EXEMPLE_CONFIG
+    from overlay.cli import EXEMPLE_CONFIG
 
     assert cle in load_config(EXEMPLE_CONFIG).overlay.metrics
 
 
 def test_le_modele_livre_est_valide():
-    from overmlay.cli import EXEMPLE_CONFIG
+    from overlay.cli import EXEMPLE_CONFIG
 
     config = load_config(EXEMPLE_CONFIG)
     assert config.overlay.hotkey
@@ -103,7 +103,7 @@ def test_jeton_du_fichier_prioritaire():
 
 
 def test_jeton_genere_puis_reutilise(tmp_path, monkeypatch):
-    monkeypatch.setattr("overmlay.config.data_path", lambda: tmp_path)
+    monkeypatch.setattr("overlay.config.data_path", lambda: tmp_path)
     config = Config()
     premier = resolve_token(config)
     assert len(premier) >= 24
@@ -112,6 +112,6 @@ def test_jeton_genere_puis_reutilise(tmp_path, monkeypatch):
 
 
 def test_jeton_non_cree_a_la_demande(tmp_path, monkeypatch):
-    monkeypatch.setattr("overmlay.config.data_path", lambda: tmp_path)
+    monkeypatch.setattr("overlay.config.data_path", lambda: tmp_path)
     assert resolve_token(Config(), create=False) == ""
     assert not (tmp_path / "token").exists()

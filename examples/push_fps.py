@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exemple : alimenter le compteur FPS d'Overmlay depuis son propre programme.
+"""Exemple : alimenter le compteur FPS d'Overlay depuis son propre programme.
 
 Utile quand ni PresentMon ni MangoHud ne conviennent : un moteur de jeu, un
 emulateur ou un banc de test peut publier ses trames sur l'API HTTP.

@@ -9,10 +9,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from overmlay.config import OverlayConfig  # noqa: E402
-from overmlay.models import Group, Kind, Snapshot  # noqa: E402
-from overmlay.overlay.hotkeys import HotkeyListener  # noqa: E402
-from overmlay.overlay.window import (  # noqa: E402
+from overlay.config import OverlayConfig  # noqa: E402
+from overlay.models import Group, Kind, Snapshot  # noqa: E402
+from overlay.overlay.hotkeys import HotkeyListener  # noqa: E402
+from overlay.overlay.window import (  # noqa: E402
     COULEUR_CHAUD,
     COULEUR_OK,
     COULEUR_TIEDE,

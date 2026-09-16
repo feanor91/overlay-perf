@@ -2,15 +2,15 @@ import io
 
 import pytest
 
-from overmlay.fps.sources import (
+from overlay.fps.sources import (
     MangoHudSource,
     PresentMonSource,
     build_frame_source,
     consume_presentmon_csv,
     parse_mangohud_line,
 )
-from overmlay.fps.tracker import FpsBackend, FrameTimeTracker, percentile
-from overmlay.models import Group, Kind
+from overlay.fps.tracker import FpsBackend, FrameTimeTracker, percentile
+from overlay.models import Group, Kind
 
 CSV_V1 = """Application,ProcessID,SwapChainAddress,Runtime,Dropped,TimeInSeconds,msBetweenPresents
 jeu.exe,1234,0x1,DXGI,0,1.000,16.68
@@ -117,7 +117,7 @@ def test_flux_interrompu_devient_perime(monkeypatch):
     peuvent renvoyer la meme valeur, ce qui rendrait le resultat aleatoire.
     """
     instant = [1000.0]
-    monkeypatch.setattr("overmlay.fps.tracker.time.monotonic", lambda: instant[0])
+    monkeypatch.setattr("overlay.fps.tracker.time.monotonic", lambda: instant[0])
 
     tracker = FrameTimeTracker(window_seconds=1.0, stale_after=2.0)
     tracker.add_frame_time(16.0)

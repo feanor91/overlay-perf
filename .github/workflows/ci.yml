@@ -19,18 +19,19 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
           cache: pip
 
       # La logique de connexion de l'application mobile est testee sous Node ;
       # sans lui, ces tests seraient silencieusement sautes.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Node 20 est en fin de vie depuis avril 2026 ; 24 est l'actuelle LTS.
+          node-version: "24"
 
       - name: Installer le paquet et ses dependances de developpement
         run: |
@@ -51,16 +52,17 @@ jobs:
     name: Tests sous horloge a faible resolution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Node 20 est en fin de vie depuis avril 2026 ; 24 est l'actuelle LTS.
+          node-version: "24"
 
       - name: Installer le paquet et ses dependances de developpement
         run: |
@@ -74,16 +76,17 @@ jobs:
     name: Tests avec l'overlay (PySide6)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          # Node 20 est en fin de vie depuis avril 2026 ; 24 est l'actuelle LTS.
+          node-version: "24"
 
       - name: Bibliotheques systeme requises par Qt
         run: |

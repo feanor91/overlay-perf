@@ -1,4 +1,4 @@
-# Overmlay
+# Overlay
 
 Overlay de monitoring materiel pour le PC, avec une application mobile compagnon.
 
@@ -9,7 +9,7 @@ l'overlay entier s'ouvre et se ferme par un raccourci clavier.
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Agent Overmlay (Python, sur le PC)          │
+│  Agent Overlay (Python, sur le PC)          │
 │                                              │
 │  capteurs ──► hub ──┬──► overlay Qt          │   ← a l'ecran, par-dessus le jeu
 │  (hwmon, NVML,      │                        │
@@ -28,8 +28,8 @@ montre le telephone sont toujours coherents.
 Python 3.10 ou plus recent.
 
 ```bash
-git clone https://github.com/feanor91/overmlay-perf
-cd overmlay-perf
+git clone https://github.com/feanor91/Overlay-perf
+cd Overlay-perf
 pip install ".[all]"
 ```
 
@@ -37,7 +37,7 @@ Les extras se choisissent separement si besoin :
 
 | Extra | Contenu | Necessaire pour |
 | --- | --- | --- |
-| *(aucun)* | psutil, platformdirs | lire les capteurs, `overmlay sensors` |
+| *(aucun)* | psutil, platformdirs | lire les capteurs, `Overlay sensors` |
 | `server` | FastAPI, uvicorn, qrcode | l'application mobile |
 | `overlay` | PySide6, pynput | l'affichage a l'ecran et le raccourci global |
 | `all` | les deux | l'usage courant |
@@ -46,13 +46,13 @@ Les extras se choisissent separement si besoin :
 ## Demarrage rapide
 
 ```bash
-overmlay sensors      # ce que votre machine expose reellement
-overmlay run          # overlay + serveur mobile
-overmlay pair         # QR code a scanner depuis le telephone
+Overlay sensors      # ce que votre machine expose reellement
+Overlay run          # overlay + serveur mobile
+Overlay pair         # QR code a scanner depuis le telephone
 ```
 
-`overmlay run` lance l'overlay et le serveur. `overmlay serve` ne lance que le
-serveur (pratique sur une machine sans session graphique), `overmlay overlay` ne
+`Overlay run` lance l'overlay et le serveur. `Overlay serve` ne lance que le
+serveur (pratique sur une machine sans session graphique), `Overlay overlay` ne
 lance que l'affichage local.
 
 Aucun materiel sous la main ? `mock = true` dans la section `[general]` remplace
@@ -64,7 +64,7 @@ tous les capteurs par des valeurs simulees, de quoi regler l'affichage tranquill
 Il n'y a rien a installer depuis un magasin d'applications : l'agent sert lui-meme
 une application web installable (PWA).
 
-1. Sur le PC : `overmlay pair`, qui affiche une adresse et un QR code.
+1. Sur le PC : `Overlay pair`, qui affiche une adresse et un QR code.
 2. Sur le telephone, connecte au **meme reseau local**, scannez le QR code ou
    saisissez l'adresse.
 3. « Ajouter a l'ecran d'accueil » depuis le menu du navigateur : l'application
@@ -144,10 +144,10 @@ Si vous y tenez malgre tout, ne le faites jamais en HTTP simple : le jeton et
 toute la telemetrie circuleraient en clair sur chaque reseau traverse. Il faut un
 certificat valide (un `tls_cert` auto-signe ne convient pas : les navigateurs
 refusent d'installer une application depuis une origine non approuvee) et,
-idealement, un port non standard. Overmlay vous avertit au demarrage si
+idealement, un port non standard. Overlay vous avertit au demarrage si
 `public_url` est en HTTP.
 
-### Ce que fait Overmlay de son cote
+### Ce que fait Overlay de son cote
 
 - **Verrouillage anti-force brute.** Apres 10 echecs d'authentification en cinq
   minutes, l'adresse fautive est bloquee pendant cinq minutes (`max_auth_failures`
@@ -159,7 +159,7 @@ idealement, un port non standard. Overmlay vous avertit au demarrage si
   l'adresse du tunnel et un seul attaquant verrouillerait tout le monde. Cette
   en-tete n'est **jamais** lue sans cette option : elle est triviale a forger, et
   la croire permettrait d'echapper au verrou en changeant de valeur a chaque essai.
-- **Rotation du jeton.** `overmlay pair --rotate` en genere un nouveau et
+- **Rotation du jeton.** `Overlay pair --rotate` en genere un nouveau et
   invalide les telephones deja appaires. A faire au moindre doute.
 
 
@@ -167,7 +167,7 @@ idealement, un port non standard. Overmlay vous avertit au demarrage si
 
 ### Images par seconde
 
-Overmlay ne s'injecte dans aucun jeu. Trois sources, selectionnees par
+Overlay ne s'injecte dans aucun jeu. Trois sources, selectionnees par
 `[fps] mode` :
 
 | Mode | Plateforme | Fonctionnement |
@@ -181,10 +181,10 @@ Overmlay ne s'injecte dans aucun jeu. Trois sources, selectionnees par
 Cote MangoHud, lancez le jeu en journalisant :
 
 ```bash
-MANGOHUD_CONFIG=output_folder=~/.local/share/overmlay/mangohud,autostart_log=1 mangohud %command%
+MANGOHUD_CONFIG=output_folder=~/.local/share/Overlay/mangohud,autostart_log=1 mangohud %command%
 ```
 
-Outre le FPS moyen, Overmlay publie le temps de trame et les centiles bas
+Outre le FPS moyen, Overlay publie le temps de trame et les centiles bas
 (**1 % low** et **0,1 % low**), c'est-a-dire l'inverse des 99e et 99,9e centiles de
 duree de trame. Ce sont eux qui decrivent les saccades que la moyenne masque. Les
 interruptions de flux (alt-tab, ecran de chargement) sont ecartees pour ne pas
@@ -205,7 +205,7 @@ fausser durablement ces centiles.
 API publique pour les temperatures et les ventilateurs : il faut un pilote en mode
 noyau. Installez [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor),
 lancez-le **en administrateur**, puis activez `Options > Remote Web Server > Run`.
-Overmlay interroge alors son serveur interne sur `http://127.0.0.1:8085/data.json`.
+Overlay interroge alors son serveur interne sur `http://127.0.0.1:8085/data.json`.
 Sans lui, vous aurez la charge CPU, la memoire et le GPU NVIDIA, mais ni les
 temperatures de la carte mere ni les vitesses de ventilateur.
 
@@ -224,13 +224,13 @@ Sous Linux, `cpu.power` se decline en `cpu.power.core`, `cpu.power.uncore` et
 du total, jamais des supplements. Sur une machine bi-socket, `cpu.power` est la
 somme des boitiers, chacun restant disponible en `cpu.package.N.power`.
 
-**RAPL compte de l'energie, pas une puissance.** Overmlay deduit les watts de la
+**RAPL compte de l'energie, pas une puissance.** Overlay deduit les watts de la
 variation du compteur entre deux cycles : la toute premiere lecture ne produit donc
-rien, et `overmlay sensors` echantillonne deux fois pour cette raison.
+rien, et `Overlay sensors` echantillonne deux fois pour cette raison.
 
 **Ces compteurs sont souvent reserves a root.** Depuis la CVE-2020-8694 — une
 mesure fine de la consommation permet des attaques par canal auxiliaire — la
-plupart des distributions restreignent leur lecture. Overmlay se desactive alors
+plupart des distributions restreignent leur lecture. Overlay se desactive alors
 proprement en expliquant la marche a suivre plutot que d'afficher un vide. Pour les
 ouvrir :
 
@@ -246,7 +246,7 @@ comme pleine echelle de la jauge. Une seule ligne de configuration couvre donc l
 deux fabricants. Il en va de meme pour `gpu.N.load`, `gpu.N.temp`, `gpu.N.fan` et
 `gpu.N.vram.used`. Seule exception : un GPU AMD **sous Windows** passe par
 LibreHardwareMonitor et garde des cles `lhm.*` propres a la machine, que
-`overmlay sensors` vous donnera. Il en va de meme pour `cpu.power` sous Windows :
+`Overlay sensors` vous donnera. Il en va de meme pour `cpu.power` sous Windows :
 LibreHardwareMonitor le publie sous une cle `lhm.*` qui contient le modele du
 processeur.
 
@@ -258,25 +258,25 @@ n'apparait donc qu'une fois. Sur une machine hybride, les cartes AMD sont
 numerotees a la suite des cartes NVIDIA, pour que les deux ne se disputent pas
 `gpu.0`.
 
-`overmlay sensors` liste les cles reellement disponibles sur votre machine ; ce
+`Overlay sensors` liste les cles reellement disponibles sur votre machine ; ce
 sont elles qu'on met dans `[overlay] metrics`.
 
 
 ## Configuration
 
 ```bash
-overmlay config --init   # cree le fichier a partir du modele commente
-overmlay config --path   # affiche son emplacement
+Overlay config --init   # cree le fichier a partir du modele commente
+Overlay config --path   # affiche son emplacement
 ```
 
 Le fichier vit dans le repertoire de configuration de l'utilisateur
-(`~/.config/overmlay/config.toml` sous Linux,
-`%LOCALAPPDATA%\overmlay\config.toml` sous Windows) ; `--config` accepte un autre
+(`~/.config/Overlay/config.toml` sous Linux,
+`%LOCALAPPDATA%\Overlay\config.toml` sous Windows) ; `--config` accepte un autre
 chemin. Toute option omise garde sa valeur par defaut, et une valeur invalide est
 refusee au demarrage avec un message explicite plutot qu'en cours de route.
 
 Le modele complet et commente se trouve dans
-[`src/overmlay/data/config.example.toml`](src/overmlay/data/config.example.toml).
+[`src/Overlay/data/config.example.toml`](src/Overlay/data/config.example.toml).
 Les reglages les plus utiles :
 
 ```toml
@@ -304,7 +304,7 @@ est l'ordre d'affichage.
 ## API
 
 Toutes les routes `/api/*` (et le WebSocket) exigent le jeton, presente au choix
-dans `Authorization: Bearer …`, dans l'en-tete `X-Overmlay-Token` ou dans le
+dans `Authorization: Bearer …`, dans l'en-tete `X-Overlay-Token` ou dans le
 parametre d'URL `token` — ce dernier etant le seul moyen d'authentifier un
 WebSocket depuis un navigateur.
 
@@ -348,7 +348,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
   sortie utilisable, et c'est meme sa principale raison d'etre.
 - **Wayland.** Le positionnement absolu des fenetres et les raccourcis clavier
   globaux y sont restreints par conception. L'overlay fonctionne sous X11 ou XWayland ;
-  sous Wayland pur, le raccourci peut rester inactif — Overmlay le signale au
+  sous Wayland pur, le raccourci peut rester inactif — Overlay le signale au
   demarrage plutot que d'echouer en silence.
 - **PresentMon** demande les droits administrateur.
 - **Ventilateurs a zero.** Une vitesse de 0 RPM est generalement un connecteur
@@ -385,13 +385,13 @@ Organisation du code :
 
 | Chemin | Role |
 | --- | --- |
-| `src/overmlay/models.py` | `Reading` et `Snapshot`, le vocabulaire partage par tout le reste |
-| `src/overmlay/sensors/` | Un module par source materielle, plus la detection automatique |
-| `src/overmlay/fps/` | Calcul des metriques de fluidite et sources de trames |
-| `src/overmlay/hub.py` | Boucle d'echantillonnage et diffusion aux abonnes |
-| `src/overmlay/server/` | API HTTP/WebSocket, jeton, appairage |
-| `src/overmlay/webapp/` | L'application mobile (HTML/CSS/JS, sans dependance) |
-| `src/overmlay/overlay/` | Fenetre Qt et raccourci global |
+| `src/Overlay/models.py` | `Reading` et `Snapshot`, le vocabulaire partage par tout le reste |
+| `src/Overlay/sensors/` | Un module par source materielle, plus la detection automatique |
+| `src/Overlay/fps/` | Calcul des metriques de fluidite et sources de trames |
+| `src/Overlay/hub.py` | Boucle d'echantillonnage et diffusion aux abonnes |
+| `src/Overlay/server/` | API HTTP/WebSocket, jeton, appairage |
+| `src/Overlay/webapp/` | L'application mobile (HTML/CSS/JS, sans dependance) |
+| `src/Overlay/overlay/` | Fenetre Qt et raccourci global |
 
 Ajouter une source de capteurs revient a implementer `SensorBackend` (`available()`
 et `read()`) puis a la declarer dans `detect_backends()` : l'overlay, l'API et

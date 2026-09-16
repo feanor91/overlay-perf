@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from overlay.config import Config, resolve_token
@@ -24,6 +24,10 @@ class Runtime:
     tracker: FrameTimeTracker | None
     frame_source: FrameSource | None
     token: str
+    #: Avertissements actionnables sur les capteurs attendus mais absents
+    #: (LibreHardwareMonitor injoignable, aucun capteur detecte...), a l'usage de
+    #: la CLI pour un affichage clair au demarrage.
+    warnings: list[str] = field(default_factory=list)
 
     def start_frame_source(self) -> None:
         if self.frame_source is None:
@@ -40,12 +44,14 @@ class Runtime:
 
 def build_runtime(config: Config, *, need_token: bool = True) -> Runtime:
     """Construit le hub et ses sources a partir de la configuration validee."""
+    warnings: list[str] = []
     backends = detect_backends(
         per_core=config.sensors.per_core,
         include_io=config.sensors.include_io,
         disabled=frozenset(config.sensors.disabled),
         lhm_url=config.sensors.lhm_url,
         force_mock=config.general.mock,
+        warnings=warnings,
     )
     log.info("Backends actifs : %s", ", ".join(b.name for b in backends) or "aucun")
 
@@ -77,4 +83,5 @@ def build_runtime(config: Config, *, need_token: bool = True) -> Runtime:
         tracker=tracker,
         frame_source=frame_source,
         token=token,
+        warnings=warnings,
     )

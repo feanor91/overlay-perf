@@ -106,3 +106,66 @@ def test_source_de_trames_absente_ne_bloque_pas():
     assert runtime.frame_source is None
     runtime.start_frame_source()  # ne doit pas lever
     runtime.stop_frame_source()
+
+
+def test_runtime_sans_avertissement_par_defaut():
+    config = Config()
+    config.general.mock = True
+    assert build_runtime(config, need_token=False).warnings == []
+
+
+def test_runtime_porte_les_avertissements_de_detection(monkeypatch):
+    """Le mode simule court-circuite la detection : on verifie le relais lui-meme."""
+    from overlay import runtime as runtime_mod
+
+    def detection_simulee(**kwargs):
+        avertissements = kwargs.get("warnings")
+        if avertissements is not None:
+            avertissements.append("message de detection")
+        from overlay.sensors.mock import MockBackend
+
+        return [MockBackend()]
+
+    monkeypatch.setattr(runtime_mod, "detect_backends", detection_simulee)
+    config = Config()
+    runtime = build_runtime(config, need_token=False)
+    assert runtime.warnings == ["message de detection"]
+
+
+def test_avertissements_affiches_clairement_sur_la_sortie_d_erreur(capsys):
+    from overlay.cli import _imprimer_avertissements
+
+    _imprimer_avertissements(["premier probleme", "second probleme"])
+    sortie = capsys.readouterr()
+    assert sortie.out == ""  # jamais sur stdout : ne doit pas polluer --json
+    assert "Attention : premier probleme" in sortie.err
+    assert "Attention : second probleme" in sortie.err
+
+
+def test_commande_run_affiche_les_avertissements_de_detection(monkeypatch, capsys, tmp_path):
+    """Reproduit un demarrage sous Windows sans LibreHardwareMonitor joignable."""
+    from overlay import cli as cli_mod
+
+    def detection_simulee(**kwargs):
+        avertissements = kwargs.get("warnings")
+        if avertissements is not None:
+            avertissements.append("LibreHardwareMonitor injoignable sur test")
+        from overlay.sensors.mock import MockBackend
+
+        return [MockBackend()]
+
+    monkeypatch.setattr("overlay.runtime.detect_backends", detection_simulee)
+    # Le jeton serait sinon ecrit dans le vrai repertoire de donnees de l'utilisateur.
+    monkeypatch.setattr("overlay.config.data_path", lambda: tmp_path)
+    # Isole la commande de l'execution reseau reelle (uvicorn.serve bloquerait) :
+    # seul l'affichage des avertissements, avant tout demarrage, nous interesse ici.
+    monkeypatch.setattr(cli_mod, "_run_serveur_seul", lambda runtime: 0)
+
+    config = Config()
+    config.fps.mode = "off"
+
+    args = cli_mod.build_parser().parse_args(["serve"])
+    code = cli_mod.commande_run(config, overlay=False, server=True, args=args)
+
+    assert code == 0
+    assert "Attention : LibreHardwareMonitor injoignable sur test" in capsys.readouterr().err

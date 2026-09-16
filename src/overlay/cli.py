@@ -119,6 +119,7 @@ def commande_config(args: argparse.Namespace) -> int:
 
 def commande_sensors(config: Config, args: argparse.Namespace) -> int:
     runtime = build_runtime(config, need_token=False)
+    _imprimer_avertissements(runtime.warnings)
     snapshot = runtime.hub.poll_sync()
     # Deux lectures : les debits et la charge CPU sont des deltas entre deux appels.
     import time
@@ -219,6 +220,7 @@ def commande_run(
         return 1
 
     runtime = build_runtime(config, need_token=server)
+    _imprimer_avertissements(runtime.warnings)
     runtime.start_frame_source()
     try:
         if overlay:
@@ -280,6 +282,17 @@ def _creer_serveur(runtime: Runtime):
 
 def _schema(runtime: Runtime) -> str:
     return "https" if (runtime.config.server.tls_cert and runtime.config.server.tls_key) else "http"
+
+
+def _imprimer_avertissements(warnings: list[str]) -> None:
+    """Affiche les avertissements de detection materielle sans qu'on puisse les rater.
+
+    Sans ceci, un message equivalent partait dans les journaux au niveau INFO,
+    invisible avec le niveau par defaut (WARNING) : les mesures manquaient alors
+    sans explication, y compris pour qui regardait la sortie de « overlay run ».
+    """
+    for message in warnings:
+        print(f"\nAttention : {message}", file=sys.stderr)
 
 
 def _avertir_exposition(runtime: Runtime) -> None:

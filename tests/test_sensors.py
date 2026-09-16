@@ -478,3 +478,91 @@ def test_detection_respecte_les_backends_desactives():
     tous = {"psutil", "hwmon", "nvidia", "amdgpu", "lhm"}
     noms = {b.name for b in detect_backends(disabled=tous)}
     assert noms == {"mock"}  # repli automatique quand plus rien n'est disponible
+
+
+def test_absence_totale_de_capteurs_produit_un_avertissement_structure():
+    tous = {"psutil", "hwmon", "nvidia", "amdgpu", "lhm"}
+    avertissements: list = []
+    detect_backends(disabled=tous, warnings=avertissements)
+    assert avertissements == ["Aucun capteur detecte : bascule sur le backend de demonstration."]
+
+
+def test_absence_totale_de_capteurs_journalisee_sans_collecte(caplog):
+    tous = {"psutil", "hwmon", "nvidia", "amdgpu", "lhm"}
+    with caplog.at_level("WARNING"):
+        detect_backends(disabled=tous)
+    assert "Aucun capteur detecte" in caplog.text
+
+
+# --- Detection sous Windows : LibreHardwareMonitor --------------------------
+#
+# Windows n'est pas la plateforme de ces tests : psutil et asyncio verifient
+# `sys.platform` a l'import et refusent de charger sous une fausse valeur. On
+# importe donc tout normalement puis on ne patche `sys.platform` que dans le
+# module `overlay.sensors` deja charge, ce qui isole la seule branche visee.
+
+
+@pytest.fixture
+def windows_simule(monkeypatch):
+    monkeypatch.setattr("overlay.sensors.sys.platform", "win32")
+
+
+def test_lhm_injoignable_produit_un_avertissement_actionnable(windows_simule, monkeypatch):
+    from overlay.sensors.windows_lhm import LibreHardwareMonitorBackend
+
+    monkeypatch.setattr(LibreHardwareMonitorBackend, "available", lambda self: False)
+    avertissements: list = []
+    backends = detect_backends(warnings=avertissements)
+
+    assert "lhm" not in {b.name for b in backends}
+    assert len(avertissements) == 1
+    message = avertissements[0]
+    # Doit nommer l'adresse interrogee et donner une marche a suivre concrete,
+    # verifiee contre le code source de LibreHardwareMonitor (case persistante,
+    # demarrage minimise avec Windows) plutot que devinee.
+    assert "127.0.0.1:8085" in message
+    assert "administrateur" in message
+    assert "Remote Web Server" in message
+    assert "Run on Windows Startup" in message
+
+
+def test_lhm_injoignable_journalise_sans_collecte(windows_simule, monkeypatch, caplog):
+    from overlay.sensors.windows_lhm import LibreHardwareMonitorBackend
+
+    monkeypatch.setattr(LibreHardwareMonitorBackend, "available", lambda self: False)
+    with caplog.at_level("INFO"):
+        detect_backends()
+    assert "LibreHardwareMonitor injoignable" in caplog.text
+
+
+def test_lhm_desactive_explicitement_reste_silencieux(windows_simule, monkeypatch, caplog):
+    """Desactiver la source ne doit produire ni avertissement ni requete reseau."""
+    from overlay.sensors.windows_lhm import LibreHardwareMonitorBackend
+
+    appele = False
+
+    def espion(self):
+        nonlocal appele
+        appele = True
+        return False
+
+    monkeypatch.setattr(LibreHardwareMonitorBackend, "available", espion)
+    avertissements: list = []
+    with caplog.at_level("INFO"):
+        backends = detect_backends(disabled={"lhm"}, warnings=avertissements)
+
+    assert avertissements == []
+    assert "LibreHardwareMonitor" not in caplog.text
+    assert not appele
+    assert "lhm" not in {b.name for b in backends}
+
+
+def test_lhm_disponible_ne_produit_aucun_avertissement(windows_simule, monkeypatch):
+    from overlay.sensors.windows_lhm import LibreHardwareMonitorBackend
+
+    monkeypatch.setattr(LibreHardwareMonitorBackend, "available", lambda self: True)
+    avertissements: list = []
+    backends = detect_backends(warnings=avertissements)
+
+    assert avertissements == []
+    assert "lhm" in {b.name for b in backends}

@@ -208,7 +208,35 @@ noyau. Installez [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/
 lancez-le **en administrateur**, puis activez `Options > Remote Web Server > Run`.
 Overlay interroge alors son serveur interne sur `http://127.0.0.1:8085/data.json`.
 Sans lui, vous aurez la charge CPU, la memoire et le GPU NVIDIA, mais ni les
-temperatures de la carte mere ni les vitesses de ventilateur.
+temperatures de la carte mere ni les vitesses de ventilateur — et Overlay
+l'annoncera clairement au demarrage (voir ci-dessous), plutot que de laisser
+ces mesures manquer sans explication.
+
+**Pour ne plus y penser a chaque session**, LibreHardwareMonitor retient ses
+propres reglages d'une fois sur l'autre (verifie dans son code source, pas
+suppose) : cochez, dans son menu **Options**, `Remote Web Server > Run`,
+`Start Minimized` puis `Run on Windows Startup`. Il demarre ensuite deja
+en administrateur et minimise a chaque ouverture de session Windows, serveur
+actif, sans autre intervention. PresentMon, lui, n'a jamais besoin d'etre
+lance a la main : Overlay le demarre et l'arrete lui-meme a chaque session.
+
+**Overlay previent si LibreHardwareMonitor est injoignable.** Au lancement de
+`overlay run`, `overlay serve` ou `overlay overlay`, si la source thermique
+attendue manque, un avertissement clair s'affiche — la marche a suivre
+ci-dessus, sans avoir a chercher dans les journaux :
+
+```
+Attention : LibreHardwareMonitor injoignable sur http://127.0.0.1:8085/data.json : les
+temperatures, ventilateurs et consommations cote carte mere resteront absents.
+  1. Lancez LibreHardwareMonitor en administrateur.
+  2. Menu Options > Remote Web Server > Run.
+  3. Pour ne plus y penser : Options > Start Minimized, puis Run on Windows Startup.
+```
+
+`overlay sensors` l'affiche egalement. Le message disparait des que la source
+concernee redevient joignable ; le desactiver explicitement dans la
+configuration (`sensors.disabled = ["lhm"]`) le fait taire, sans avertissement
+ni requete reseau superflue.
 
 ### Consommation electrique
 
@@ -360,7 +388,7 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 238 tests
+python -m pytest -q                  # 248 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
 

@@ -359,10 +359,21 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 
 ```bash
 pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 237 tests
+python -m pytest -q                  # 238 tests
 python -m ruff check src tests tools
 python tools/make_icons.py           # regenere les icones de la PWA
+
+# Rejoue la suite avec une horloge monotone a faible resolution
+python -m pytest -q -p tests.coarse_clock
 ```
+
+Ce dernier point merite un mot. Sous Windows, avant Python 3.13,
+`time.monotonic()` avance par pas d'environ 15 ms : deux appels rapproches
+renvoient la meme valeur. Tout ce qui deduit une grandeur d'un ecart de temps —
+les debits disque et reseau, la peremption du flux d'images — s'y comporte
+autrement, et la CI ne le revelait qu'apres coup. Le greffon `tests.coarse_clock`
+quantifie l'horloge de la meme facon et rend le probleme reproductible sur
+n'importe quelle machine ; un job dedie le rejoue a chaque push.
 
 Les tests de l'overlay demandent PySide6 et sont sautes automatiquement s'il est
 absent ; en environnement sans affichage, `QT_QPA_PLATFORM=offscreen` suffit. La

@@ -43,6 +43,33 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+  horloge-grossiere:
+    # Sous Windows, avant Python 3.13, time.monotonic() avance par pas de ~15 ms.
+    # Rejouer la suite avec une horloge quantifiee revele ici les tests et le code
+    # qui dependent d'un ecart de temps non nul, sans attendre le retour d'un
+    # runner Windows.
+    name: Tests sous horloge a faible resolution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Installer le paquet et ses dependances de developpement
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Tests
+        run: python -m pytest -q -p tests.coarse_clock
+
   overlay:
     name: Tests avec l'overlay (PySide6)
     runs-on: ubuntu-latest

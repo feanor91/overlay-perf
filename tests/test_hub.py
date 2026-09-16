@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from overmlay.hub import MetricsHub, merge_readings
-from overmlay.models import Group
+from overmlay.models import Group, Snapshot
 from tests.helpers import BrokenBackend, StaticBackend, reading
 
 
@@ -56,24 +56,31 @@ async def test_historique_borne():
 
 
 async def test_abonne_lent_recoit_les_mesures_les_plus_recentes():
-    """Un telephone sature ne doit pas bloquer la collecte ni recevoir du perime."""
-    valeurs = iter(range(1, 100))
-    backend = StaticBackend([])
+    """Un telephone sature ne doit pas bloquer la collecte ni recevoir du perime.
 
-    def lecture():
-        return [reading("cpu.load", float(next(valeurs)))]
+    La diffusion est sollicitee directement : compter sur la boucle d'echantillonnage
+    rendrait le resultat dependant de la resolution de l'horloge, qui varie fortement
+    d'un systeme a l'autre.
+    """
+    hub = MetricsHub([StaticBackend([])], poll_interval=1.0)
+    queue = hub.subscribe(maxsize=2)
 
-    backend.read = lecture
-    hub = MetricsHub([backend], poll_interval=0.01)
+    for valeur in range(1, 6):
+        hub._publish(Snapshot.build([reading("cpu.load", float(valeur))]))
+
+    assert queue.qsize() == 2
+    retenues = [(await queue.get()).get("cpu.load").value for _ in range(2)]
+    # Ce sont les deux dernieres emises, pas les deux premieres.
+    assert retenues == [4.0, 5.0]
+
+
+async def test_la_collecte_continue_malgre_un_abonne_sature():
+    """Une file pleine ne doit jamais bloquer la boucle d'echantillonnage."""
+    hub = MetricsHub([StaticBackend([reading("cpu.load", 7.0)])], poll_interval=0.02)
     async with hub:
-        queue = hub.subscribe(maxsize=2)
-        await asyncio.sleep(0.3)  # bien plus de mesures que la file n'en contient
-        assert queue.qsize() == 2
-        premiere = await queue.get()
-        seconde = await queue.get()
-        # Les deux elements retenus sont consecutifs et recents, pas les premiers emis.
-        assert seconde.get("cpu.load").value == premiere.get("cpu.load").value + 1
-        assert premiere.get("cpu.load").value > 5
+        hub.subscribe(maxsize=1)  # abonne qui ne consomme jamais
+        await asyncio.sleep(0.2)
+    assert len(hub.history()) >= 2
 
 
 async def test_arret_ferme_les_backends():

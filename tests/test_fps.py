@@ -109,11 +109,26 @@ def test_duree_de_trame_nulle_ou_negative_ignoree(tracker):
     assert tracker.stats().frame_count == 0
 
 
-def test_flux_interrompu_devient_perime():
-    tracker = FrameTimeTracker(window_seconds=1.0, stale_after=0.0)
+def test_flux_interrompu_devient_perime(monkeypatch):
+    """Le jeu ferme : au-dela du delai, le compteur ne doit plus rien afficher.
+
+    L'horloge est pilotee explicitement : sous Windows, avant Python 3.13,
+    time.monotonic() avance par pas d'environ 15 ms et deux appels consecutifs
+    peuvent renvoyer la meme valeur, ce qui rendrait le resultat aleatoire.
+    """
+    instant = [1000.0]
+    monkeypatch.setattr("overmlay.fps.tracker.time.monotonic", lambda: instant[0])
+
+    tracker = FrameTimeTracker(window_seconds=1.0, stale_after=2.0)
     tracker.add_frame_time(16.0)
+    assert tracker.stats().stale is False
+
+    instant[0] += 2.5  # plus aucune trame depuis plus de stale_after
     stats = tracker.stats()
-    assert stats.stale is True and stats.fps is None
+    assert stats.stale is True
+    assert stats.fps is None
+    # L'historique demeure : il servira si le flux reprend.
+    assert stats.frame_count == 1
 
 
 def test_reinitialisation(tracker):

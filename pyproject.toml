@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "overmlay"
+version = "0.1.0"
+description = "Overlay de monitoring materiel (FPS, temperatures, CPU/GPU/RAM, ventilateurs) avec application mobile compagnon."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "feanor91" }]
+keywords = ["overlay", "monitoring", "fps", "hardware", "sensors", "gpu", "cpu"]
+classifiers = [
+    "Environment :: X11 Applications",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Monitoring",
+]
+dependencies = [
+    "psutil>=5.9",
+    "platformdirs>=3.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "websockets>=12.0",
+    "qrcode>=7.4",
+]
+overlay = [
+    "PySide6>=6.6",
+    "pynput>=1.7",
+]
+all = [
+    "overmlay[server]",
+    "overmlay[overlay]",
+]
+dev = [
+    "overmlay[server]",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/feanor91/overmlay-perf"
+Issues = "https://github.com/feanor91/overmlay-perf/issues"
+
+[project.scripts]
+overmlay = "overmlay.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+overmlay = ["webapp/*", "webapp/**/*", "data/*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["B008"]

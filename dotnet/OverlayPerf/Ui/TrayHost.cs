@@ -18,7 +18,8 @@ public sealed class TrayHost : Form
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Func<string> _status;
 
-    public TrayHost(AppConfig config, ILogger log, Action toggleOverlay, Action? showPairing, Action tick, Func<string> status)
+    public TrayHost(AppConfig config, ILogger log, Action toggleOverlay, Action? showPairing, Action? openSettings,
+        Action tick, Func<string> status)
     {
         _log = log;
         _status = status;
@@ -40,6 +41,10 @@ public sealed class TrayHost : Form
         {
             var menu = new ContextMenuStrip();
             menu.Items.Add("Afficher / masquer l'overlay", null, (_, _) => toggleOverlay());
+            if (openSettings is not null)
+            {
+                menu.Items.Add("Parametres…", null, (_, _) => openSettings());
+            }
             if (showPairing is not null)
             {
                 menu.Items.Add("Appairer un telephone…", null, (_, _) => showPairing());
@@ -47,7 +52,6 @@ public sealed class TrayHost : Form
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Ouvrir le journal du jour", null, (_, _) => OpenPath(Logging.LogSetup.CurrentLogFile));
             menu.Items.Add("Ouvrir le dossier des journaux", null, (_, _) => OpenPath(Paths.LogDir));
-            menu.Items.Add("Ouvrir la configuration", null, (_, _) => OpenConfig());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Etat…", null, (_, _) => ShowStatus());
             menu.Items.Add("Quitter", null, (_, _) => Application.Exit());
@@ -71,6 +75,13 @@ public sealed class TrayHost : Form
     }
 
     public bool RegisterHotkey(string combination, Action callback) => _hotkeys.Register(combination, callback);
+
+    /// <summary>Remplace tous les raccourcis (apres modification dans la fenetre Parametres).</summary>
+    public void ReplaceHotkeys(Action<HotkeyManager> register)
+    {
+        _hotkeys.UnregisterAll();
+        register(_hotkeys);
+    }
 
     /// <summary>Notification non bloquante : seule voie vers l'utilisateur quand il n'y a pas de terminal.</summary>
     public void Notify(string title, string message, ToolTipIcon icon = ToolTipIcon.Warning)
@@ -103,7 +114,7 @@ public sealed class TrayHost : Form
 
     protected override void SetVisibleCore(bool value) => base.SetVisibleCore(false);
 
-    private void OpenConfig()
+    public void OpenConfig()
     {
         try
         {

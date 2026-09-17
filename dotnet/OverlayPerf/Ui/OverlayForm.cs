@@ -28,7 +28,8 @@ public sealed class OverlayForm : Form
     private const int LabelValueGap = 16;
 
     private readonly OverlayConfig _config;
-    private readonly Font _font;
+    private Font _font;
+    private bool _clickThrough;
     private IReadOnlyList<Reading> _readings = [];
     private (int Width, int Height, int LabelWidth, int ValueWidth, int PerColumn, int LineHeight) _layout;
 
@@ -45,13 +46,47 @@ public sealed class OverlayForm : Form
         Opacity = config.Opacity;
         DoubleBuffered = true;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        _font = new Font("Segoe UI Semibold", config.FontSize, FontStyle.Regular, GraphicsUnit.Point);
-        if (_font.Name != "Segoe UI Semibold")
+        _clickThrough = config.ClickThrough;
+        _font = CreateFont(config.FontSize);
+        Size = new Size(1, 1);
+    }
+
+    private static Font CreateFont(int size)
+    {
+        var font = new Font("Segoe UI Semibold", size, FontStyle.Regular, GraphicsUnit.Point);
+        if (font.Name == "Segoe UI Semibold")
+        {
+            return font;
+        }
+        font.Dispose();
+        return new Font(FontFamily.GenericSansSerif, size, FontStyle.Bold, GraphicsUnit.Point);
+    }
+
+    /// <summary>Relit la configuration (modifiee par la fenetre Parametres) et l'applique sans redemarrer.</summary>
+    public void ApplySettings(Snapshot? latest)
+    {
+        if (Math.Abs(_font.SizeInPoints - _config.FontSize) > 0.01)
         {
             _font.Dispose();
-            _font = new Font(FontFamily.GenericSansSerif, config.FontSize, FontStyle.Bold, GraphicsUnit.Point);
+            _font = CreateFont(_config.FontSize);
         }
-        Size = new Size(1, 1);
+        Opacity = _config.Opacity;
+        if (_clickThrough != _config.ClickThrough)
+        {
+            _clickThrough = _config.ClickThrough;
+            if (IsHandleCreated)
+            {
+                RecreateHandle(); // les styles etendus ne se changent qu'a la creation de la fenetre
+            }
+        }
+        _readings = []; // force le refiltrage avec la nouvelle selection
+        if (latest is not null)
+        {
+            Apply(latest);
+        }
+        ComputeLayout();
+        AdjustGeometry();
+        Invalidate();
     }
 
     protected override bool ShowWithoutActivation => true;

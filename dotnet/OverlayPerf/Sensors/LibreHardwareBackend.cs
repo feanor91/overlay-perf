@@ -346,6 +346,28 @@ public sealed class LibreHardwareBackend : SensorBackend
                 yield return r;
             }
         }
+
+        // Vitesse reelle des ventilateurs (tours/minute), en plus du pourcentage ci-dessus :
+        // « GPU Fan » seul, ou « GPU Fan 1 », « GPU Fan 2 »... sur les cartes a plusieurs
+        // ventilateurs. Le premier est gpu.N.fan.rpm, les suivants gpu.N.fan.2.rpm, etc.
+        var rpmFans = flat.Where(x => x.Sensor.SensorType == SensorType.Fan
+                                       && x.Sensor.Name.StartsWith("GPU Fan", StringComparison.OrdinalIgnoreCase))
+                          .OrderBy(x => x.Sensor.Name, StringComparer.OrdinalIgnoreCase)
+                          .Select(x => x.Sensor)
+                          .ToList();
+        for (var i = 0; i < rpmFans.Count; i++)
+        {
+            var value = ToDouble(rpmFans[i].Value);
+            if (value is null) continue;
+            var suffix = i == 0 ? "fan.rpm" : $"fan.{i + 1}.rpm";
+            var label = i == 0 && rpmFans.Count == 1 ? "ventilateur (RPM)" : $"ventilateur {i + 1} (RPM)";
+            yield return new Reading
+            {
+                Key = $"{prefix}.{suffix}", Label = $"{name} {label}", Value = Math.Round(value.Value, 0), Unit = "RPM",
+                Group = Group.Gpu, Kind = Kind.Fan, Minimum = 0.0, Maximum = Math.Max(3500.0, ToDouble(rpmFans[i].Max) ?? 0),
+                Source = Name, Extra = extra,
+            };
+        }
     }
 
     private IEnumerable<Reading> FanAliases(IHardware hw, List<(IHardware Owner, ISensor Sensor)> flat)

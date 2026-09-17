@@ -9,7 +9,10 @@
 
 const CLE_REGLAGES = 'overlay.reglages';
 const CLE_MASQUES = 'overlay.masques';
+const CLE_PAGE = 'overlay.page';
 const POINTS_COURBE = 40;
+// Periode de relecture de la selection de l'overlay (modifiable depuis le PC a tout moment).
+const RAFRAICHISSEMENT_OVERLAY = 20000;
 const RECONNEXION_MIN = 1000;
 const RECONNEXION_MAX = 15000;
 
@@ -44,6 +47,9 @@ const elements = {
   btnOublier: document.getElementById('btn-oublier'),
   btnTout: document.getElementById('btn-tout'),
   btnRien: document.getElementById('btn-rien'),
+  ongletOverlay: document.getElementById('onglet-overlay'),
+  ongletTout: document.getElementById('onglet-tout'),
+  noteOverlay: document.getElementById('note-overlay'),
 };
 
 const etat = {
@@ -60,6 +66,13 @@ const etat = {
   clesRendues: '',
   connuesMesures: new Map(),
   verrouEcran: null,
+  // Page courante : 'overlay' (meme selection que l'ecran du PC) ou 'tout' (le reste).
+  page: 'overlay',
+  // Cles affichees par l'overlay du PC, dans son ordre ; null tant qu'on ne les connait pas.
+  clesOverlay: null,
+  erreurOverlay: '',
+  minuteurOverlay: null,
+  dernierSnapshot: null,
 };
 
 // --- Persistance -----------------------------------------------------------
@@ -120,6 +133,7 @@ function chargerReglages() {
 
 let reglages = chargerReglages();
 etat.masques = new Set(lireJson(CLE_MASQUES, []));
+etat.page = lireJson(CLE_PAGE, 'overlay') === 'tout' ? 'tout' : 'overlay';
 
 // --- Connexion -------------------------------------------------------------
 
@@ -185,6 +199,7 @@ function connecter() {
     etat.reconnexion = RECONNEXION_MIN;
     majEtat(`En direct${etiquetteAdresse()}`, 'direct');
     elements.messageReglages.textContent = '';
+    chargerSelectionOverlay(base);
   };
 
   socket.onmessage = (evenement) => {
@@ -250,8 +265,87 @@ function programmerReconnexion(options = {}) {
 
 // --- Rendu -----------------------------------------------------------------
 
+// --- Selection de l'overlay (page « Overlay ») -----------------------------
+
+function enTeteJeton() {
+  return reglages.token ? { 'X-Overlay-Token': reglages.token } : {};
+}
+
+async function chargerSelectionOverlay(base) {
+  if (etat.minuteurOverlay) {
+    clearTimeout(etat.minuteurOverlay);
+    etat.minuteurOverlay = null;
+  }
+  const origine = base || adresseCourante();
+  try {
+    const reponse = await fetch(`${origine.replace(/\/+$/, '')}/api/overlay`, { headers: enTeteJeton() });
+    if (reponse.status === 404) {
+      // Agent sans cette route (version Python) : on montre tout, en le disant.
+      etat.clesOverlay = null;
+      etat.erreurOverlay = "Cet agent ne publie pas la selection de l'overlay : toutes les mesures sont affichees.";
+    } else if (!reponse.ok) {
+      throw new Error(`HTTP ${reponse.status}`);
+    } else {
+      const corps = await reponse.json();
+      etat.clesOverlay = Array.isArray(corps.keys) ? corps.keys : [];
+      etat.erreurOverlay = '';
+    }
+  } catch (erreur) {
+    if (etat.clesOverlay === null) {
+      etat.erreurOverlay = "Selection de l'overlay indisponible pour l'instant : toutes les mesures sont affichees.";
+    }
+  }
+  etat.clesRendues = '';
+  if (etat.dernierSnapshot) appliquerSnapshot(etat.dernierSnapshot);
+  // Le PC peut changer la selection a tout moment (fenetre Parametres) : on relit regulierement.
+  etat.minuteurOverlay = setTimeout(() => chargerSelectionOverlay(), RAFRAICHISSEMENT_OVERLAY);
+}
+
+function choisirPage(page) {
+  etat.page = page === 'tout' ? 'tout' : 'overlay';
+  ecrireJson(CLE_PAGE, etat.page);
+  elements.ongletOverlay.setAttribute('aria-selected', String(etat.page === 'overlay'));
+  elements.ongletTout.setAttribute('aria-selected', String(etat.page === 'tout'));
+  // Le choix des mesures masquees ne concerne que la page « Tout le reste ».
+  elements.btnAffichage.hidden = etat.page !== 'tout';
+  if (etat.page !== 'tout') {
+    elements.panneauAffichage.hidden = true;
+    elements.btnAffichage.setAttribute('aria-expanded', 'false');
+  }
+  etat.clesRendues = '';
+  if (etat.dernierSnapshot) appliquerSnapshot(etat.dernierSnapshot);
+}
+
+function mesuresVisibles(mesures) {
+  const parCle = new Map(mesures.map((mesure) => [mesure.key, mesure]));
+  const dansOverlay = new Set(etat.clesOverlay || []);
+  if (etat.page === 'overlay') {
+    if (etat.clesOverlay === null) return mesures;
+    // Meme contenu et meme ordre que l'overlay a l'ecran.
+    return etat.clesOverlay.map((cle) => parCle.get(cle)).filter(Boolean);
+  }
+  return mesures.filter((mesure) => !dansOverlay.has(mesure.key) && !etat.masques.has(mesure.key));
+}
+
+function majNoteOverlay(visibles) {
+  const note = elements.noteOverlay;
+  if (etat.page === 'overlay' && etat.erreurOverlay) {
+    note.textContent = etat.erreurOverlay;
+    note.hidden = false;
+  } else if (etat.page === 'overlay' && etat.clesOverlay && !visibles.length) {
+    note.textContent = "L'overlay du PC n'affiche aucune mesure pour l'instant (ou aucune n'a encore de valeur).";
+    note.hidden = false;
+  } else if (etat.page === 'tout' && etat.clesOverlay && !visibles.length) {
+    note.textContent = "Tout est deja sur la page Overlay, ou masque via « Mesures ».";
+    note.hidden = false;
+  } else {
+    note.hidden = true;
+  }
+}
+
 function appliquerSnapshot(snapshot) {
   const mesures = snapshot.readings || [];
+  etat.dernierSnapshot = snapshot;
   elements.hote.textContent = snapshot.host || '—';
   elements.vide.hidden = mesures.length > 0;
 
@@ -268,18 +362,28 @@ function appliquerSnapshot(snapshot) {
   }
   if (catalogueModifie) construireListeMesures();
 
-  const visibles = mesures.filter((mesure) => !etat.masques.has(mesure.key));
-  const signature = visibles.map((mesure) => mesure.key).join('|');
+  const visibles = mesuresVisibles(mesures);
+  majNoteOverlay(visibles);
+  const signature = `${etat.page}|${visibles.map((mesure) => mesure.key).join('|')}`;
   if (signature !== etat.clesRendues) {
-    construireTuiles(visibles);
+    construireTuiles(visibles, { grouper: etat.page === 'tout' });
     etat.clesRendues = signature;
   }
   for (const mesure of visibles) majTuile(mesure);
 }
 
-function construireTuiles(mesures) {
+function construireTuiles(mesures, options = { grouper: true }) {
   elements.tableau.textContent = '';
   etat.tuiles.clear();
+
+  if (!options.grouper) {
+    // Page « Overlay » : une seule grille, dans l'ordre exact de l'overlay.
+    const grille = document.createElement('div');
+    grille.className = 'grille';
+    for (const mesure of mesures) grille.appendChild(creerTuile(mesure));
+    elements.tableau.appendChild(grille);
+    return;
+  }
 
   const parGroupe = new Map();
   for (const mesure of mesures) {
@@ -553,6 +657,12 @@ elements.btnOublier.addEventListener('click', () => {
 elements.btnTout.addEventListener('click', () => basculerToutes(true));
 elements.btnRien.addEventListener('click', () => basculerToutes(false));
 
+elements.ongletOverlay.addEventListener('click', () => {
+  choisirPage('overlay');
+  if (etat.socket && etat.socket.readyState === WebSocket.OPEN) chargerSelectionOverlay();
+});
+elements.ongletTout.addEventListener('click', () => choisirPage('tout'));
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   majVerrouEcran();
@@ -581,5 +691,6 @@ if ('serviceWorker' in navigator) {
 }
 
 remplirFormulaire();
+choisirPage(etat.page);
 majVerrouEcran();
 connecter();

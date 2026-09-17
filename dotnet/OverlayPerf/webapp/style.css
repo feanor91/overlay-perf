@@ -40,6 +40,39 @@ body {
 
 .actions { display: flex; gap: 8px; align-items: center; }
 
+.onglets {
+  flex-basis: 100%;
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--carte);
+  border: 1px solid var(--carte-bord);
+}
+.onglet {
+  flex: 1;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--texte-faible);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  min-height: 38px;
+  cursor: pointer;
+}
+.onglet[aria-selected="true"] { color: var(--texte); background: var(--fond); }
+
+.note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  color: var(--texte-faible);
+  border: 1px dashed var(--carte-bord);
+  border-radius: 10px;
+}
+
 .etat {
   font-size: 0.75rem;
   padding: 4px 10px;

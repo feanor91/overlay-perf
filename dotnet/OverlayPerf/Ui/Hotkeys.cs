@@ -62,7 +62,7 @@ public sealed class HotkeyManager : IDisposable
         }
     }
 
-    public void Dispose()
+    public void UnregisterAll()
     {
         foreach (var id in _registered.Keys)
         {
@@ -70,6 +70,8 @@ public sealed class HotkeyManager : IDisposable
         }
         _registered.Clear();
     }
+
+    public void Dispose() => UnregisterAll();
 
     /// <summary>Convertit <c>&lt;ctrl&gt;+&lt;alt&gt;+o</c> en modificateurs Win32 et touche virtuelle.</summary>
     public static bool TryParse(string combination, out uint modifiers, out Keys key, out string error)

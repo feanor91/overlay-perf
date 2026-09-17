@@ -59,7 +59,7 @@ public sealed class OverlayConfig
     [
         "fps.current", "fps.low1", "fps.frametime",
         "cpu.load", "cpu.temp", "cpu.power",
-        "gpu.0.load", "gpu.0.temp", "gpu.0.power", "gpu.0.vram.used",
+        "gpu.0.load", "gpu.0.temp", "gpu.0.power", "gpu.0.vram.used", "gpu.0.fan.rpm",
         "memory.used",
         "fan.*",
     ];

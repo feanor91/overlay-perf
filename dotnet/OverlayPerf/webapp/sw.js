@@ -6,7 +6,7 @@
  */
 'use strict';
 
-const CACHE = 'overlay-v1';
+const CACHE = 'overlay-v2';
 const COQUILLE = [
   '/',
   '/app/index.html',

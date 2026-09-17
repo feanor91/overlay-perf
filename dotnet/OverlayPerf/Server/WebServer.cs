@@ -227,6 +227,27 @@ public sealed class WebServer : IAsyncDisposable
             return Json(new JsonObject { ["snapshots"] = snapshots });
         });
 
+        // Selection de l'overlay a l'ecran, resolue en cles exactes : la page « Overlay » de
+        // l'application mobile affiche exactement la meme chose, dans le meme ordre.
+        app.MapGet("/api/overlay", (HttpContext ctx) =>
+        {
+            if (Authorize(ctx) is { } refused) return refused;
+            var overlay = _config.Overlay;
+            var latest = _hub.Latest;
+            var keys = latest is not null
+                ? latest.Filter(overlay.Metrics).Readings.Select(r => r.Key).ToList()
+                : overlay.Metrics.Where(m => !m.EndsWith('*')).ToList();
+            return Results.Json(new
+            {
+                keys,
+                patterns = overlay.Metrics,
+                position = overlay.Position,
+                opacity = overlay.Opacity,
+                columns = overlay.Columns,
+                enabled = overlay.Enabled,
+            });
+        });
+
         app.MapGet("/api/fps", (HttpContext ctx) =>
         {
             if (Authorize(ctx) is { } refused) return refused;

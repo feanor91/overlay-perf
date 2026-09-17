@@ -42,10 +42,18 @@ avertissement dans le journal).
 2. Double-cliquez sur `OverlayPerf.exe` et acceptez l'invite UAC.
 3. Une notification confirme le démarrage ; l'icône dans la zone de notification donne accès à :
    - **Afficher / masquer l'overlay** (aussi par `Ctrl+Alt+O`, clic gauche sur l'icône) ;
+   - **Paramètres…** : coin de l'écran, opacité, marge, police, colonnes, click-through,
+     raccourcis, et la liste des mesures de l'overlay à cocher/décocher et ordonner
+     (« Appliquer » agit à chaud, « OK » enregistre dans `config.toml` en gardant ses commentaires) ;
    - **Appairer un téléphone…** : QR code et adresse à scanner ;
-   - **Ouvrir le journal du jour**, **le dossier des journaux**, **la configuration** ;
+   - **Ouvrir le journal du jour**, **le dossier des journaux** ;
    - **État…** : capteurs actifs, PresentMon, serveur, avertissements ;
    - **Quitter** (aussi par `Ctrl+Alt+Q`).
+
+L'application mobile a deux pages : **Overlay** montre exactement ce que l'overlay affiche à
+l'écran, dans le même ordre (relu toutes les 20 s depuis `GET /api/overlay`, donc un changement
+dans Paramètres… se propage au téléphone tout seul) ; **Tout le reste** regroupe les autres
+mesures par famille, avec le bouton « Mesures » pour en masquer sur ce téléphone.
 
 Depuis un terminal, quelques commandes de diagnostic (l'invite UAC apparaît aussi) :
 
@@ -84,8 +92,9 @@ Les options `[sensors] lhm_url`, `[fps] mangohud_log_dir` et le mode `mangohud` 
 mais ignorés (journalisés).
 
 Clés de mesures publiées : `fps.*`, `cpu.load`, `cpu.temp`, `cpu.power`, `cpu.clock`,
-`gpu.N.load|temp|hotspot|fan|vram.used|vram.load|power|clock.core|clock.mem` (la carte dédiée
-est toujours `gpu.0`, les puces intégrées viennent après), `memory.load|used|total|commit`,
+`gpu.N.load|temp|hotspot|fan|fan.rpm|fan.2.rpm|vram.used|vram.load|power|clock.core|clock.mem`
+(`fan` en %, `fan.rpm` et `fan.2.rpm` en tours/minute par ventilateur ; la carte dédiée est
+toujours `gpu.0`, les puces intégrées viennent après), `memory.load|used|total|commit`,
 `fan.<composant>.<nom>` (carte mère, AIO), `temp.<disque>`, `network.in|out`,
 `storage.read|write`, et le catalogue brut `lhm.<matériel>.<type>.<sonde>`.
 `OverlayPerf.exe --sensors` liste ce qui existe réellement sur votre machine.
@@ -96,7 +105,7 @@ Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0) sous
 
 ```bash
 cd dotnet
-dotnet test                                                   # 61 tests
+dotnet test                                                   # 70 tests
 dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
 ```
 
@@ -111,14 +120,14 @@ manifeste : `dotnet bin/Release/net8.0-windows/win-x64/OverlayPerf.dll --no-elev
 OverlayPerf/
   Program.cs            point d'entrée, options, instance unique, élévation, commandes console
   App/Runtime.cs        assemblage capteurs + FPS + hub + serveur, texte d'état
-  Config/               AppConfig (TOML), chemins, modèle de configuration
+  Config/               AppConfig (TOML), chemins, modèle, écriture ciblée de config.toml (TomlPatcher)
   Logging/LogSetup.cs   Serilog : fichier journalier + console si terminal
   Models/               Reading, Snapshot (JSON identique à l'agent Python)
   Sensors/              LibreHardwareMonitor intégré, compteurs Windows, nvidia-smi, simulation
   Fps/                  FrameTimeTracker, parseur CSV PresentMon, sous-processus PresentMon
   Hub/MetricsHub.cs     boucle de collecte, historique, diffusion aux abonnés
   Server/               Kestrel : API, WebSocket, jeton, verrouillage, appairage/QR, PWA embarquée
-  Ui/                   overlay WinForms, icône de notification, raccourcis globaux, dialogue d'appairage
+  Ui/                   overlay WinForms, icône de notification, raccourcis globaux, Paramètres, appairage
   webapp/               application mobile (copie de src/overlay/webapp, embarquée dans l'exe)
 OverlayPerf.Tests/      xUnit : tracker, parseur PresentMon, config, auth, appairage, raccourcis
 ```

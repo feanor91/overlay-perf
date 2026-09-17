@@ -189,8 +189,45 @@ public static class Program
             }
         }
 
+        var configPath = options.ConfigPath ?? Paths.ConfigFile;
+
+        void RegisterHotkeys(HotkeyManager hotkeys)
+        {
+            if (overlay is not null) hotkeys.Register(config.Overlay.Hotkey, ToggleOverlay);
+            hotkeys.Register(config.Overlay.HotkeyQuit, () => host!.BeginInvoke(Application.Exit));
+        }
+
+        // Reglages modifies dans la fenetre Parametres : appliques a chaud, puis enregistres.
+        void ApplyOverlaySettings()
+        {
+            overlay?.ApplySettings(runtime.Hub.Latest);
+            host!.ReplaceHotkeys(RegisterHotkeys);
+            log.LogInformation("Parametres appliques : {Position}, opacite {Opacity:P0}, {Count} mesures",
+                config.Overlay.Position, config.Overlay.Opacity, config.Overlay.Metrics.Count);
+        }
+
+        void SaveOverlaySettings()
+        {
+            ConfigWriter.SaveOverlay(configPath, config.Overlay);
+            log.LogInformation("Parametres enregistres dans {Path}", configPath);
+            host!.Notify("Parametres enregistres", configPath, ToolTipIcon.Info);
+        }
+
+        SettingsDialog? settings = null;
+        void OpenSettings()
+        {
+            if (settings is { IsDisposed: false })
+            {
+                settings.Activate();
+                return;
+            }
+            settings = new SettingsDialog(config.Overlay, () => runtime.Hub.Latest, ApplyOverlaySettings, SaveOverlaySettings);
+            settings.FormClosed += (_, _) => settings = null;
+            settings.Show();
+        }
+
         host = new TrayHost(config, logs.CreateLogger("overlay.ui"), ToggleOverlay,
-            withServer ? ShowPairing : null, Tick, runtime.StatusText);
+            withServer ? ShowPairing : null, overlay is not null ? OpenSettings : null, Tick, runtime.StatusText);
         runtime.Problem += message =>
         {
             log.LogError("{Message}", message);
@@ -199,19 +236,18 @@ public static class Program
 
         runtime.Start(withServer);
 
+        host.ReplaceHotkeys(RegisterHotkeys);
         if (overlay is not null)
         {
-            var hotkeyOk = host.RegisterHotkey(config.Overlay.Hotkey, ToggleOverlay);
             if (config.Overlay.VisibleAtStart)
             {
                 overlay.Show();
             }
-            else if (!hotkeyOk)
+            else
             {
-                log.LogWarning("Overlay masque au demarrage et raccourci indisponible : utilisez l'icone de notification pour l'afficher");
+                log.LogInformation("Overlay masque au demarrage : {Hotkey} ou l'icone de notification pour l'afficher", config.Overlay.Hotkey);
             }
         }
-        host.RegisterHotkey(config.Overlay.HotkeyQuit, () => host.BeginInvoke(Application.Exit));
 
         if (consoleAttached)
         {
@@ -258,6 +294,7 @@ public static class Program
         Application.Run(host);
 
         watchdog.Dispose();
+        settings?.Dispose();
         overlay?.Dispose();
         host.Dispose();
         runtime.Dispose();

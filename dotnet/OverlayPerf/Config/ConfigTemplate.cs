@@ -109,6 +109,7 @@ public static class ConfigTemplate
             "gpu.0.temp",
             "gpu.0.power",
             "gpu.0.vram.used",
+            "gpu.0.fan.rpm",
             "memory.used",
             "fan.*",
         ]

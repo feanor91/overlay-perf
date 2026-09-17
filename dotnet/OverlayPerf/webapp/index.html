@@ -26,6 +26,12 @@
     <button id="btn-reglages" class="bouton" type="button" aria-expanded="false"
             title="Reglages de connexion">Reglages</button>
   </div>
+  <nav class="onglets" role="tablist" aria-label="Pages">
+    <button id="onglet-overlay" class="onglet" type="button" role="tab" aria-selected="true"
+            title="Les memes mesures que l'overlay a l'ecran, dans le meme ordre">Overlay</button>
+    <button id="onglet-tout" class="onglet" type="button" role="tab" aria-selected="false"
+            title="Toutes les autres mesures, par famille">Tout le reste</button>
+  </nav>
 </header>
 
 <section id="panneau-reglages" class="panneau" hidden>
@@ -42,7 +48,7 @@
          placeholder="https://mon-pc.exemple.fr">
   <label for="champ-token">Jeton d'acces</label>
   <input id="champ-token" type="password" autocomplete="off" spellcheck="false"
-         placeholder="colle depuis « overlay pair »">
+         placeholder="colle depuis « Appairer un telephone »">
   <label class="case">
     <input id="champ-veille" type="checkbox">
     <span>Garder l'ecran allume</span>
@@ -55,8 +61,11 @@
 </section>
 
 <section id="panneau-affichage" class="panneau" hidden>
-  <h2>Mesures affichees</h2>
-  <p class="aide">Decochez ce que vous ne voulez pas voir. Le choix est conserve sur ce telephone.</p>
+  <h2>Mesures affichees dans « Tout le reste »</h2>
+  <p class="aide">
+    Decochez ce que vous ne voulez pas voir sur ce telephone. La page « Overlay » suit, elle,
+    la selection reglee sur le PC (icone de notification, Parametres…).
+  </p>
   <div class="panneau__actions">
     <button id="btn-tout" class="bouton" type="button">Tout cocher</button>
     <button id="btn-rien" class="bouton" type="button">Tout decocher</button>
@@ -64,11 +73,13 @@
   <div id="liste-mesures" class="liste-mesures"></div>
 </section>
 
+<p id="note-overlay" class="note" hidden></p>
+
 <main id="tableau" class="tableau" aria-live="polite"></main>
 
 <p id="vide" class="vide">
-  En attente de l'agent. Lancez <code>overlay serve</code> sur le PC, puis
-  <code>overlay pair</code> pour obtenir l'adresse et le jeton.
+  En attente de l'agent. Lancez <code>OverlayPerf.exe</code> sur le PC, puis
+  « Appairer un telephone » depuis son icone pour obtenir l'adresse et le jeton.
 </p>
 
 <script src="/app/app.js"></script>

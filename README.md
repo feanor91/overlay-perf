@@ -36,6 +36,15 @@ a part pour les temperatures et ventilateurs), tient un **journal quotidien** da
 la configuration et le jeton de l'agent Python. Voir [dotnet/README.md](dotnet/README.md).
 L'agent Python reste la version multiplateforme (Linux : MangoHud, hwmon, RAPL).
 
+## Application Android native
+
+Le dossier [`mobile/`](mobile/README.md) contient une application Android native
+(Flutter/Dart) qui remplace la PWA pour l'usage principal : garder l'ecran allume en
+permanence pour suivre la telemetrie, via un blocage de veille natif fiable (l'API Wake
+Lock du navigateur se coupe trop facilement). Deux pages : « Overlay » (miroir exact de
+l'overlay a l'ecran du PC) et « Tout le reste » (les autres mesures, groupees par
+famille). Voir [mobile/README.md](mobile/README.md).
+
 ## Installation
 
 Python 3.10 ou plus recent.

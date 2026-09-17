@@ -158,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _Note(text: widget.connection.overlayError!),
           Expanded(
             child: snapshot == null
-                ? const _Empty()
+                ? _Empty(onOpenSettings: _settings.urls.isEmpty ? _openSettings : null)
                 : visible.isEmpty
                     ? const _Empty(message: "Rien a afficher pour l'instant.")
                     : _Grid(readings: visible, history: _history),
@@ -315,19 +315,33 @@ class _Grid extends StatelessWidget {
 
 class _Empty extends StatelessWidget {
   final String? message;
-  const _Empty({this.message});
+  final VoidCallback? onOpenSettings;
+  const _Empty({this.message, this.onOpenSettings});
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Text(
-          message ??
-              "En attente de l'agent. Lancez OverlayPerf.exe (ou l'agent Python) sur le PC, "
-                  "puis « Appairer un telephone » depuis son icone pour obtenir l'adresse et le jeton.",
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textFaible, height: 1.5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              message ??
+                  "En attente de l'agent. Lancez OverlayPerf.exe (ou l'agent Python) sur le PC, "
+                      "puis « Appairer un telephone » depuis son icone pour obtenir l'adresse et le jeton.",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textFaible, height: 1.5),
+            ),
+            if (onOpenSettings != null) ...[
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: onOpenSettings,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Scanner le QR code du PC'),
+              ),
+            ],
+          ],
         ),
       ),
     );

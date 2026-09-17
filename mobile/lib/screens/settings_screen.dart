@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../pairing.dart';
 import '../settings.dart';
 import '../theme.dart';
+import 'qr_scan_screen.dart';
 
 /// Reglages de connexion : adresses (locale + distante), jeton, verrou d'ecran.
 /// Miroir du panneau « Reglages » de la PWA, avec le blocage de veille en plus
@@ -59,6 +61,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _scanQrCode() async {
+    final raw = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (raw == null || !mounted) return; // annule par l'utilisateur
+
+    final link = PairingLink.parse(raw);
+    if (link == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ce QR code n'est pas une adresse d'appairage Overlay valide.")),
+      );
+      return;
+    }
+
+    setState(() {
+      // Le QR se scanne typiquement chez soi, sur le meme reseau : l'adresse va
+      // dans le champ local. L'adresse distante n'est jamais touchee ici.
+      _local.text = link.origin;
+      if (link.token != null) _token.text = link.token!;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(link.token != null
+          ? 'Adresse et jeton renseignes depuis le QR code.'
+          : "Adresse renseignee, mais aucun jeton trouve dans ce QR code."),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,8 +96,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          FilledButton.icon(
+            onPressed: _scanQrCode,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scanner le QR code du PC'),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          ),
+          const SizedBox(height: 8),
           const Text(
-            "Renseignez les deux adresses si vous utilisez l'application hors de chez vous : "
+            "Depuis l'icone d'Overlay sur le PC : « Appairer un telephone » affiche "
+            "l'adresse et le jeton sous forme de QR code, plus rapide et plus sur qu'une saisie manuelle.",
+            style: TextStyle(fontSize: 12, color: AppColors.textFaible),
+          ),
+          const SizedBox(height: 20),
+          const Divider(color: AppColors.carteBord),
+          const SizedBox(height: 8),
+          const Text(
+            "Ou renseignez les deux adresses a la main si vous utilisez l'application hors de chez vous : "
             "elle essaie la locale en premier, puis bascule sur la distante.",
             style: TextStyle(fontSize: 13, color: AppColors.textFaible),
           ),

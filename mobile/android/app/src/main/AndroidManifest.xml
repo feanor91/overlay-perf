@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Scan du QR code d'appairage uniquement : pas de flash requis, l'appareil
+         reste installable sur un telephone sans camera (peu probable, mais gratuit a couvrir). -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:label="Overlay"

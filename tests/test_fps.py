@@ -24,6 +24,18 @@ jeu.exe,99,0x2,DXGI,Application,1.008,8.31
 jeu.exe,99,0x2,DXGI,Application,1.016,N/A
 """
 
+# En-tete reellement ecrit par PresentMon 2.3+ sans --v1_metrics ni --v2_metrics
+# (le mode par defaut, et celui qu'Overlay lance) : la colonne se nomme
+# "MsBetweenPresents", avec un M majuscule, contrairement a la version 1.x et aux
+# versions 2.0-2.2 qui utilisaient "msBetweenPresents".
+CSV_V2_DEFAUT = (
+    "Application,ProcessID,SwapChainAddress,PresentRuntime,SyncInterval,PresentFlags,"
+    "AllowsTearing,PresentMode,TimeInSeconds,MsBetweenSimulationStart,MsBetweenPresents,"
+    "MsBetweenDisplayChange,MsInPresentAPI,MsRenderPresentLatency,MsUntilDisplayed\n"
+    "jeu.exe,1234,0x1,DXGI,1,0,0,Hardware: Independent Flip,1.000,8.30,8.33,8.33,0.10,5.00,12.00\n"
+    "jeu.exe,1234,0x1,DXGI,1,0,0,Hardware: Independent Flip,1.008,8.30,8.31,8.31,0.10,5.00,12.00\n"
+)
+
 
 # --- Centiles --------------------------------------------------------------
 
@@ -193,8 +205,8 @@ def test_backend_fps_sans_source_renvoie_des_valeurs_vides():
 
 @pytest.mark.parametrize(
     ("csv", "trames", "duree"),
-    [(CSV_V1, 3, 22.2), (CSV_V2, 2, 8.32)],
-    ids=["presentmon-v1", "presentmon-v2"],
+    [(CSV_V1, 3, 22.2), (CSV_V2, 2, 8.32), (CSV_V2_DEFAUT, 2, 8.32)],
+    ids=["presentmon-v1", "presentmon-v2", "presentmon-v2-defaut-Mmajuscule"],
 )
 def test_lecture_des_deux_formats_presentmon(csv, trames, duree, tracker):
     assert consume_presentmon_csv(io.StringIO(csv), tracker) == trames
@@ -293,6 +305,34 @@ def test_presentmon_introuvable_au_lancement_avertit_sans_lever(tracker, monkeyp
     assert "Attention" in erreur
     assert "PresentMon-2.3.1-x64.exe" in erreur
     assert "presentmon_path" in erreur
+
+
+def test_ligne_de_commande_presentmon_sans_option_disparue(tracker, monkeypatch):
+    """--no_top n'existe plus depuis PresentMon 2.0 : le passer fait quitter le
+
+    processus aussitot avec « error: unrecognized option », silencieusement
+    puisque stderr est jete — FPS et 1 % low restent alors vides sans qu'aucune
+    trame n'ait jamais ete lue.
+    """
+    commandes: list[list[str]] = []
+
+    class ProcessusFactice:
+        stdout = io.StringIO("")
+
+        def poll(self):
+            return 0
+
+    def popen_factice(command, **kwargs):
+        commandes.append(command)
+        return ProcessusFactice()
+
+    monkeypatch.setattr("overlay.fps.sources.subprocess.Popen", popen_factice)
+    source = PresentMonSource(tracker, "C:/PresentMon-2.5.1-x64.exe")
+
+    source._run()
+
+    assert len(commandes) == 1
+    assert "--no_top" not in commandes[0]
 
 
 # --- Avertissements quand aucune source de trames n'est trouvee ------------

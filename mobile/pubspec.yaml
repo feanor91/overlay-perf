@@ -21,6 +21,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/
+
+# Icone reprise du meme dessin que l'overlay a l'ecran et l'executable Windows
+# (barres croissantes). Regenerer avec : dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: "#0B0F17"
+  adaptive_icon_foreground: android/app/src/main/res/drawable/ic_launcher_foreground.png

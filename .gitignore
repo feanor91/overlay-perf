@@ -1,15 +1,5 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-build/
-dist/
-.venv/
-venv/
-.env
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+# Chaque application a son propre .gitignore (dotnet/, mobile/) pour ses artefacts
+# de compilation ; ceci ne couvre que ce qui peut apparaitre a la racine du depot.
 *.log
 .DS_Store
 config.local.toml

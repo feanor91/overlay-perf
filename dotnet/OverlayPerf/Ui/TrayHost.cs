@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using Microsoft.Extensions.Logging;
 using OverlayPerf.Config;
 
@@ -154,17 +153,21 @@ public sealed class TrayHost : Form
         MessageBox.Show(this, _status(), "OverlayPerf — etat", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
+    /// <summary>Reprend l'icone de l'executable lui-meme (app.ico, embarquee via
+    /// ApplicationIcon) plutot qu'une copie separee : une seule image source pour
+    /// l'exe, la barre des taches et la zone de notification.</summary>
     private static Icon LoadIcon()
     {
         try
         {
-            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("OverlayPerf.webapp.icon-192.png");
-            if (stream is not null)
+            var path = Environment.ProcessPath;
+            if (path is not null)
             {
-                using var bitmap = new Bitmap(stream);
-                using var resized = new Bitmap(bitmap, new Size(32, 32));
-                var handle = resized.GetHicon();
-                return (Icon)Icon.FromHandle(handle).Clone();
+                var extracted = Icon.ExtractAssociatedIcon(path);
+                if (extracted is not null)
+                {
+                    return extracted;
+                }
             }
         }
         catch (Exception)

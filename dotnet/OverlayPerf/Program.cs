@@ -24,6 +24,7 @@ public static class Program
           --config-init      creer un fichier de configuration d'exemple puis quitter
           --sensors          lister les capteurs detectes et un instantane, puis quitter
           --pair             afficher l'adresse et le QR code a scanner, puis quitter
+          --rotate           avec --pair : generer un nouveau jeton (invalide les telephones deja apparies)
           --mock             valeurs simulees (demonstration, aucun materiel requis)
           --no-elevate       ne pas proposer la relance en administrateur (diagnostic)
           --version          afficher la version
@@ -85,7 +86,7 @@ public static class Program
         try
         {
             if (options.Sensors) return RunSensors(config, logs);
-            if (options.Pair) return RunPair(config);
+            if (options.Pair) return RunPair(config, options.Rotate);
             return RunApp(config, options, logs, log, consoleAttached);
         }
         catch (Exception ex)
@@ -346,9 +347,26 @@ public static class Program
         return 0;
     }
 
-    private static int RunPair(AppConfig config)
+    private static int RunPair(AppConfig config, bool rotate)
     {
-        var token = Paths.ResolveToken(config);
+        string token;
+        if (rotate)
+        {
+            try
+            {
+                token = Paths.RotateToken(config);
+            }
+            catch (ConfigException ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+            Console.WriteLine("Nouveau jeton genere : les telephones deja appaires devront rescanner.\n");
+        }
+        else
+        {
+            token = Paths.ResolveToken(config);
+        }
         var scheme = config.Server.TlsCert.Length > 0 ? "https" : "http";
         var summary = Pairing.Summary(config.Server.Port, token, config.Server.PublicUrl, scheme);
         Console.WriteLine(summary.RemoteUrl.Length > 0
@@ -464,16 +482,16 @@ public static class Program
 
     private sealed record Options(
         string? ConfigPath, bool NoOverlay, bool NoServer, bool Sensors, bool Pair, bool ConfigInit,
-        bool Mock, bool Version, bool Help, bool NoElevate, string? Error)
+        bool Mock, bool Version, bool Help, bool NoElevate, bool Rotate, string? Error)
     {
         private static Options Invalid(string error) =>
-            new(null, false, false, false, false, false, false, false, false, false, error);
+            new(null, false, false, false, false, false, false, false, false, false, false, error);
 
         public static Options Parse(string[] args)
         {
             string? configPath = null;
             bool noOverlay = false, noServer = false, sensors = false, pair = false, init = false, mock = false,
-                version = false, help = false, noElevate = false;
+                version = false, help = false, noElevate = false, rotate = false;
             for (var i = 0; i < args.Length; i++)
             {
                 switch (args[i].ToLowerInvariant())
@@ -486,6 +504,7 @@ public static class Program
                     case "--no-server": noServer = true; break;
                     case "--sensors" or "sensors": sensors = true; break;
                     case "--pair" or "pair": pair = true; break;
+                    case "--rotate": rotate = true; break;
                     case "--config-init": init = true; break;
                     case "--mock": mock = true; break;
                     case "--no-elevate": noElevate = true; break;
@@ -500,7 +519,7 @@ public static class Program
                         return Invalid(args[i]);
                 }
             }
-            return new Options(configPath, noOverlay, noServer, sensors, pair, init, mock, version, help, noElevate, null);
+            return new Options(configPath, noOverlay, noServer, sensors, pair, init, mock, version, help, noElevate, rotate, null);
         }
     }
 }

@@ -37,9 +37,17 @@ public static class Paths
         return create ? RotateToken() : "";
     }
 
-    /// <summary>Remplace le jeton persiste par un nouveau, invalidant tous les telephones.</summary>
-    public static string RotateToken()
+    /// <summary>Remplace le jeton persiste par un nouveau, invalidant tous les telephones.
+    /// Un jeton fixe dans la configuration prime toujours sur le fichier : le remplacer ici
+    /// serait silencieusement sans effet, d'ou le refus explicite plutot que d'agir en vain.</summary>
+    public static string RotateToken(AppConfig? config = null)
     {
+        if (!string.IsNullOrEmpty(config?.Server.Token))
+        {
+            throw new ConfigException(
+                "[server] token est fixe dans la configuration : modifiez-le a la main "
+                + "ou videz-le pour laisser OverlayPerf gerer le jeton.");
+        }
         var token = NewToken();
         Directory.CreateDirectory(DataDir);
         File.WriteAllText(TokenFile, token);

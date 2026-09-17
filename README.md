@@ -1,151 +1,96 @@
 # Overlay
 
-Monitoring materiel du PC affiche par-dessus le jeu, avec une application
-mobile compagnon.
+Monitoring materiel du PC affiche par-dessus le jeu, avec une application Android
+compagnon.
 
 Affiche en temps reel les images par seconde, les temperatures, les charges CPU et
 GPU, la consommation electrique du processeur et de la carte graphique, la memoire
-et les vitesses de ventilateur — a l'ecran par-dessus le jeu, et sur le telephone. Chaque mesure peut etre montree ou masquee a la demande, et
-l'overlay entier s'ouvre et se ferme par un raccourci clavier. Une icone dans la
-zone de notification donne acces a l'appairage du telephone et permet de
+et les vitesses de ventilateur — a l'ecran par-dessus le jeu, et sur le telephone.
+Chaque mesure peut etre montree ou masquee a la demande, et l'overlay entier
+s'ouvre et se ferme par un raccourci clavier. Une icone dans la zone de
+notification donne acces a l'appairage du telephone, aux reglages et permet de
 quitter sans repasser par un terminal ; Ctrl-C fonctionne aussi.
 
 ```
-┌──────────────────────────────────────────────┐
-│  Agent Overlay (Python, sur le PC)           │
-│                                              │
-│  capteurs ──► hub ──┬──► overlay Qt          │   ← a l'ecran, par-dessus le jeu
-│  (hwmon, NVML,      │                        │
-│   LHM, psutil)      └──► serveur HTTP/WS ────┼──► telephone (PWA)
-│  + source FPS                                │     sur le reseau local
-│  (PresentMon / MangoHud / API)               │
-└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  OverlayPerf.exe (C#/.NET 8, Windows, droits administrateur) │
+│                                                           │
+│  capteurs ──► hub ──┬──► overlay (a l'ecran, par-dessus le jeu)
+│  (LibreHardware-    │                                    │
+│   Monitor integre,  └──► serveur HTTP/WS ────────────────┼──► telephone Android (app native)
+│   compteurs Windows)                                     │     ou navigateur (PWA embarquee)
+│  + PresentMon (FPS)      icone de notification, journaux │
+└──────────────────────────────────────────────────────────┘
 ```
 
 Les deux sorties lisent le meme flux de mesures : ce que montre l'overlay et ce que
 montre le telephone sont toujours coherents.
 
 
-## Version Windows en un seul executable (C#/.NET)
+## Les deux applications
 
-Le dossier [`dotnet/`](dotnet/README.md) contient une reecriture complete de l'agent en
-C#/.NET 8 : un unique `OverlayPerf.exe`, sans Python a installer, qui **demande les droits
-administrateur au lancement** (invite UAC), integre LibreHardwareMonitor (plus rien a lancer
-a part pour les temperatures et ventilateurs), tient un **journal quotidien** dans
-`%LOCALAPPDATA%\overlay\logs` et garde l'icone de zone de notification, le serveur mobile,
-la configuration et le jeton de l'agent Python. Voir [dotnet/README.md](dotnet/README.md).
-L'agent Python reste la version multiplateforme (Linux : MangoHud, hwmon, RAPL).
+- **[`dotnet/`](dotnet/README.md)** — `OverlayPerf.exe`, un executable Windows
+  unique, sans rien a installer a part lui. Demande les droits administrateur au
+  lancement (invite UAC), integre LibreHardwareMonitor (plus besoin de le lancer a
+  part), tient un journal quotidien dans `%LOCALAPPDATA%\overlay\logs`, et sert a la
+  fois l'overlay a l'ecran, le serveur pour le telephone et une fenetre Parametres.
+- **[`mobile/`](mobile/README.md)** — application Android native (Flutter), avec un
+  blocage de veille fiable (natif, contrairement a l'API Wake Lock du navigateur) :
+  garde l'ecran allume en permanence pour suivre la telemetrie pendant une session
+  de jeu. Scan du QR code d'appairage integre : aucune saisie manuelle du jeton.
 
-## Application Android native
-
-Le dossier [`mobile/`](mobile/README.md) contient une application Android native
-(Flutter/Dart) qui remplace la PWA pour l'usage principal : garder l'ecran allume en
-permanence pour suivre la telemetrie, via un blocage de veille natif fiable (l'API Wake
-Lock du navigateur se coupe trop facilement). Deux pages : « Overlay » (miroir exact de
-l'overlay a l'ecran du PC) et « Tout le reste » (les autres mesures, groupees par
-famille). Voir [mobile/README.md](mobile/README.md).
-
-## Installation
-
-Python 3.10 ou plus recent.
-
-```bash
-git clone https://github.com/feanor91/overlay-perf
-cd overlay-perf
-python -m venv .venv
-source .venv/bin/activate        # Linux/macOS ; sous Windows : .venv\Scripts\activate
-pip install ".[all]"
-```
-
-Un environnement virtuel n'est pas strictement necessaire, mais evite un piege
-frequent sous Windows (voir ci-dessous) et empeche les dependances d'Overlay de se
-melanger a celles d'autres projets Python.
-
-Les extras se choisissent separement si besoin :
-
-| Extra | Contenu | Necessaire pour |
-| --- | --- | --- |
-| *(aucun)* | psutil, platformdirs | lire les capteurs, `overlay sensors` |
-| `server` | FastAPI, uvicorn, qrcode | l'application mobile |
-| `overlay` | PySide6, pynput | l'affichage a l'ecran et le raccourci global |
-| `all` | les deux | l'usage courant |
-
-**Sous Windows, sans environnement virtuel**, `pip install` place `overlay.exe`
-dans `%APPDATA%\Python\PythonXY\Scripts` — un dossier absent du `PATH` par
-defaut. La commande `overlay` reste alors introuvable juste apres
-l'installation (`CommandNotFoundException` sous PowerShell), sans rien
-d'anormal a l'installation elle-meme. Deux solutions, sans rien reinstaller :
-
-- lancer `python -m overlay ...` a la place de `overlay ...` : fonctionne
-  toujours, meme sans venv, puisqu'il ne depend pas du `PATH` ;
-- ajouter ce dossier au `PATH` de l'utilisateur — son chemin exact est donne
-  par l'avertissement de pip au moment de l'installation — puis rouvrir le
-  terminal pour que le changement prenne effet.
+Chaque dossier a son propre README avec les instructions completes (installation,
+configuration, compilation). Celui-ci couvre ce qui est commun aux deux : le
+protocole, la securite, et ce qui est mesure.
 
 
 ## Demarrage rapide
 
-```bash
-overlay sensors      # ce que votre machine expose reellement
-overlay               # overlay + serveur mobile : equivalent a « overlay run »
-overlay pair          # QR code a scanner depuis le telephone
-```
+1. Telechargez [PresentMon](https://github.com/GameTechDev/PresentMon/releases)
+   (`PresentMon-<version>-x64.exe`, l'outil console — voir l'avertissement plus bas
+   sur le nom ambigu) et placez-le a cote de `OverlayPerf.exe`, ou indiquez son
+   chemin dans `[fps] presentmon_path`.
+2. Double-cliquez sur `OverlayPerf.exe`, acceptez l'invite UAC. Une notification
+   confirme le demarrage et l'overlay apparait a l'ecran.
+3. Depuis l'icone de la zone de notification : **Appairer un telephone…** affiche
+   un QR code.
+4. Installez l'application Android (voir [mobile/README.md](mobile/README.md)) et
+   scannez ce QR code depuis ses Reglages : adresse et jeton se remplissent tout
+   seuls.
 
-**`overlay` sans rien derriere lance l'overlay et le serveur** — c'est le
-comportement par defaut, `overlay run` est juste la forme explicite du meme
-appel. `overlay serve` ne lance que le serveur (pratique sur une machine sans
-session graphique), `overlay overlay` ne lance que l'affichage local.
-
-Aucun materiel sous la main ? `mock = true` dans la section `[general]` remplace
-tous les capteurs par des valeurs simulees, de quoi regler l'affichage tranquillement.
+Aucun materiel sous la main ? `mock = true` dans `[general]` remplace tous les
+capteurs par des valeurs simulees, de quoi regler l'affichage tranquillement.
 
 
-## L'application mobile
+## Acceder depuis un navigateur (sans l'application Android)
 
-Il n'y a rien a installer depuis un magasin d'applications : l'agent sert lui-meme
-une application web installable (PWA).
+`OverlayPerf.exe` sert lui-meme une application web installable (PWA), a la meme
+adresse que l'API : utile sur un appareil ou l'APK Android n'est pas installe
+(iPhone, tablette, PC portable). Le blocage de veille y est moins fiable qu'avec
+l'application native (raison d'etre de cette derniere), mais tout le reste — les
+mesures, l'appairage, le jeton — est strictement identique.
 
-1. Sur le PC : `overlay pair`, qui affiche une adresse et un QR code.
-2. Sur le telephone, connecte au **meme reseau local**, scannez le QR code ou
-   saisissez l'adresse.
-3. « Ajouter a l'ecran d'accueil » depuis le menu du navigateur : l'application
-   s'ouvre alors en plein ecran, avec sa propre icone.
-
-Le jeton d'acces voyage dans le fragment de l'URL (`#token=…`), jamais dans la
-chaine de requete : il n'apparait donc ni dans les journaux serveur ni dans
-l'en-tete `Referer`. Il est ensuite conserve sur le telephone.
-
-L'application affiche les mesures groupees par materiel, avec une jauge coloree
-quand l'echelle a un sens et une courbe d'historique sinon. Le bouton **Mesures**
-ouvre la liste complete : decochez ce que vous ne voulez pas voir, le choix est
-conserve sur ce telephone. L'option « Garder l'ecran allume » evite la mise en
-veille pendant une session de jeu.
-
-**Avec l'overlay a l'ecran (`overlay run` ou `overlay overlay`), inutile de
-repasser par `overlay pair` dans un terminal** : une icone apparait dans la
-zone de notification des le demarrage, avec un menu « Appairer un
-telephone… » qui affiche la meme adresse et le meme QR code, en fenetre.
-Desactivable via `[overlay] tray_icon = false`.
+Ouvrez l'adresse affichee par « Appairer un telephone… » dans un navigateur, puis
+« Ajouter a l'ecran d'accueil » depuis son menu pour une icone dediee.
 
 
 ## Quitter proprement
 
-- **Ctrl-C** dans le terminal fonctionne, overlay affiche ou non.
+- **Ctrl-C** dans le terminal fonctionne si l'exe a ete lance depuis un terminal.
 - **Un raccourci global** (`<ctrl>+<alt>+q` par defaut, configurable via
-  `[overlay] hotkey_quit`) quitte sans avoir a revenir au terminal.
+  `[overlay] hotkey_quit`) quitte sans avoir a revenir a un terminal.
 - **L'icone de zone de notification** propose « Quitter » dans son menu.
 
-Dans les trois cas, Overlay arrete proprement le serveur, la collecte et la
-source FPS avant de sortir.
+Dans les trois cas, OverlayPerf arrete proprement le serveur, la collecte et
+PresentMon avant de sortir.
 
-L'application retient **deux adresses** : celle du reseau local et, si vous en
-configurez une, celle joignable depuis l'exterieur. Elle essaie la locale en
-premier — sur place, elle evite le detour par Internet — puis bascule sur la
-distante en une seconde si elle ne repond pas. L'etat affiche laquelle est en
-service (« En direct · local » ou « En direct · distant »).
-
-La connexion se retablit toute seule apres une coupure Wi-Fi ou une sortie de
-veille, avec un recul exponentiel pour ne pas marteler l'agent.
+L'application (Android comme navigateur) retient **deux adresses** : celle du
+reseau local et, si vous en configurez une, celle joignable depuis l'exterieur.
+Elle essaie la locale en premier — sur place, elle evite le detour par Internet —
+puis bascule sur la distante en une seconde si elle ne repond pas. L'etat affiche
+laquelle est en service (« En direct · local » ou « En direct · distant »). La
+connexion se retablit toute seule apres une coupure Wi-Fi ou une sortie de veille,
+avec un recul exponentiel pour ne pas marteler l'agent.
 
 
 ## Acces depuis un autre reseau
@@ -202,10 +147,10 @@ Si vous y tenez malgre tout, ne le faites jamais en HTTP simple : le jeton et
 toute la telemetrie circuleraient en clair sur chaque reseau traverse. Il faut un
 certificat valide (un `tls_cert` auto-signe ne convient pas : les navigateurs
 refusent d'installer une application depuis une origine non approuvee) et,
-idealement, un port non standard. Overlay vous avertit au demarrage si
+idealement, un port non standard. OverlayPerf vous avertit au demarrage si
 `public_url` est en HTTP.
 
-### Ce que fait Overlay de son cote
+### Ce que fait OverlayPerf de son cote
 
 - **Verrouillage anti-force brute.** Apres 10 echecs d'authentification en cinq
   minutes, l'adresse fautive est bloquee pendant cinq minutes (`max_auth_failures`
@@ -217,7 +162,7 @@ idealement, un port non standard. Overlay vous avertit au demarrage si
   l'adresse du tunnel et un seul attaquant verrouillerait tout le monde. Cette
   en-tete n'est **jamais** lue sans cette option : elle est triviale a forger, et
   la croire permettrait d'echapper au verrou en changeant de valeur a chaque essai.
-- **Rotation du jeton.** `overlay pair --rotate` en genere un nouveau et
+- **Rotation du jeton.** `OverlayPerf.exe --pair --rotate` en genere un nouveau et
   invalide les telephones deja appaires. A faire au moindre doute.
 
 
@@ -225,254 +170,99 @@ idealement, un port non standard. Overlay vous avertit au demarrage si
 
 ### Images par seconde
 
-Overlay ne s'injecte dans aucun jeu. Trois sources, selectionnees par
-`[fps] mode` :
+OverlayPerf ne s'injecte dans aucun jeu. [PresentMon](https://github.com/GameTechDev/PresentMon)
+(Intel, open source) lit les traces ETW de presentation DXGI/D3D/Vulkan : il mesure
+donc tous les jeux, y compris en plein ecran exclusif. **Demande les droits
+administrateur** (deja acquis au demarrage grace au manifeste de l'exe).
 
-| Mode | Plateforme | Fonctionnement |
-| --- | --- | --- |
-| `presentmon` | Windows | [PresentMon](https://github.com/GameTechDev/PresentMon) (Intel, open source) lit les traces ETW de presentation DXGI/D3D/Vulkan. Mesure tous les jeux, y compris en plein ecran exclusif. **Demande les droits administrateur.** |
-| `mangohud` | Linux | Suit les journaux CSV de [MangoHud](https://github.com/flightlessmango/MangoHud), deja utilise comme couche Vulkan/OpenGL. |
-| `push` | toutes | Votre programme publie ses trames sur `POST /api/fps/frame`. Voir `examples/push_fps.py`. |
-| `auto` | toutes | PresentMon s'il est present, sinon MangoHud. |
-| `off` | toutes | Desactive la mesure du FPS. |
+**FPS suit l'application au premier plan**, comme les autres compteurs d'images
+(RTSS, Special K...) : OverlayPerf verifie toutes les deux secondes quelle fenetre
+a le focus et cible PresentMon exclusivement sur ce processus. Alt-tabbez vers un
+jeu et sa mesure demarre en quelques secondes, sans redemarrer OverlayPerf ; passez
+au bureau ou a une autre application et la mesure precedente reste affichee jusqu'a
+ce qu'un nouveau jeu prenne le focus (afficher le FPS de l'Explorateur ou d'un
+navigateur n'aurait pas de sens). Tant qu'aucune application n'a encore ete
+identifiee (juste apres le demarrage), un filet de securite a base de liste noire
+evite de mesurer les processus systeme connus (Explorateur, Gestionnaire des
+taches...) le temps que le vrai jeu prenne le focus.
 
 **Attention au nom : deux outils differents s'appellent tous les deux
 `PresentMon.exe`.** Le depot [GameTechDev/PresentMon](https://github.com/GameTechDev/PresentMon)
 publie a la fois l'**outil console** attendu ici (le binaire de release porte un
-nom versionne, par exemple `PresentMon-2.3.1-x64.exe`) et une **application
+nom versionne, par exemple `PresentMon-2.5.1-x64.exe`) et une **application
 graphique** distincte, « PresentMon Capture » (fenetre avec reglages, hotkeys,
-auto-target), qui se lance elle sous le nom `PresentMon.exe` — exactement celui
-qu'Overlay recherche sur le `PATH`. Si les deux sont installees, Overlay peut
-trouver et lancer la mauvaise, qui ignore silencieusement les arguments qu'on lui
-passe et se contente d'ouvrir sa fenetre : aucune trame ne remonte jamais, sans
-la moindre erreur. Pour lever toute ambiguite, indiquez le chemin exact de
-l'outil console :
+auto-target), qui se lance elle sous le nom `PresentMon.exe`. Pour lever toute
+ambiguite, placez le binaire versionne a cote de `OverlayPerf.exe`, ou indiquez
+son chemin exact :
 
 ```toml
 [fps]
-presentmon_path = "C:/Chemin/Vers/PresentMon-2.3.1-x64.exe"
+presentmon_path = "C:/Chemin/Vers/PresentMon-2.5.1-x64.exe"
 ```
 
-**Si ce chemin est errone (faute de frappe, dossier deplace, extraction
-incomplete), Overlay le signale clairement au lieu de laisser passer une
-trace Python brute :**
+D'autres modes existent (`[fps] mode`) : `push` (votre propre programme publie ses
+trames sur `POST /api/fps/frame`, utile quand PresentMon ne convient pas),
+`presentmon` (PresentMon obligatoire, erreur explicite s'il manque), `auto` (le
+defaut), `off` (desactive completement la mesure).
 
-```
-Attention : PresentMon introuvable au moment de le lancer : C:/Chemin/Vers/PresentMon-2.3.1-x64.exe
-  Ce chemin n'existe pas ou n'est pas accessible (faute de frappe, dossier deplace,
-  extraction incomplete). Verifiez-le, notamment dans [fps] presentmon_path si vous
-  l'avez renseigne, ou videz ce reglage pour rechercher automatiquement sur le PATH.
-```
-
-Cote MangoHud, lancez le jeu en journalisant :
-
-```bash
-MANGOHUD_CONFIG=output_folder=~/.local/share/overlay/mangohud,autostart_log=1 mangohud %command%
-```
-
-Outre le FPS moyen, Overlay publie le temps de trame et les centiles bas
+Outre le FPS moyen, OverlayPerf publie le temps de trame et les centiles bas
 (**1 % low** et **0,1 % low**), c'est-a-dire l'inverse des 99e et 99,9e centiles de
 duree de trame. Ce sont eux qui decrivent les saccades que la moyenne masque. Les
 interruptions de flux (alt-tab, ecran de chargement) sont ecartees pour ne pas
 fausser durablement ces centiles.
 
-**En mode `auto` (le defaut), Overlay previent si aucune source n'est trouvee.**
-Sous Windows sans PresentMon installe, ou sous Linux sans journalisation MangoHud
-active, FPS/temps de trame/1 % low restaient auparavant vides sans le moindre
-indice — meme en mode verbose. Au lancement de `overlay run`, `overlay serve` ou
-`overlay overlay`, un avertissement adapte a la plateforme s'affiche desormais :
+Le journal (`%LOCALAPPDATA%\overlay\logs`) explique toujours pourquoi FPS reste a
+« — » : PresentMon introuvable, droits administrateur manquants, ou processus
+demarre mais aucune trame recue — chaque cas produit un message different plutot
+qu'un silence.
 
-```
-Attention : Aucune source de FPS trouvee : FPS, temps de trame et 1 % low resteront
-absents.
-  1. Installez PresentMon (https://github.com/GameTechDev/PresentMon).
-  2. Verifiez qu'il est sur le PATH (« presentmon --version » doit repondre),
-     ou indiquez son chemin dans [fps] presentmon_path.
-  3. Lancez Overlay en administrateur : PresentMon en a besoin pour suivre les
-     evenements de presentation.
-```
+### Temperatures, ventilateurs, charges, consommation
 
-Passer `[fps] mode` a `"off"` desactive completement le suivi FPS, y compris cet
-avertissement.
+Windows n'expose aucune API publique pour les temperatures et les ventilateurs :
+il faut un pilote en mode noyau. [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)
+le fournit — **integre directement dans `OverlayPerf.exe`**, rien a installer ni
+lancer a part. Les droits administrateur (deja acquis au demarrage) suffisent a
+charger le pilote.
 
-**Sous Windows, Overlay verifie aussi les droits administrateur des que
-PresentMon est trouve**, sans attendre 30 secondes ni un jeu lance : c'est la
-cause la plus frequente, en pratique, de FPS/1 % low restant vides alors que
-PresentMon est bien installe et bien identifie.
+| Source | Couverture |
+| --- | --- |
+| LibreHardwareMonitor (integre) | temperatures, ventilateurs, consommations, frequences, carte mere, SSD/NVMe |
+| NVML / `nvidia-smi` | GPU NVIDIA, en secours si LibreHardwareMonitor n'en voit aucun |
+| Compteurs de performance Windows | charge CPU (globale ou par coeur), memoire, debits disque et reseau |
 
-```
-Attention : PresentMon a ete trouve (C:/.../PresentMon-2.3.1-x64.exe) mais Overlay
-ne tourne pas en administrateur : PresentMon va demarrer sans erreur visible, mais
-ne transmettra jamais aucune trame (FPS, temps de trame et 1 % low resteront a « — »).
-  Fermez Overlay, puis relancez votre terminal via un clic droit -> « Executer en
-  tant qu'administrateur ».
-```
+**La carte dediee est toujours `gpu.0`, les puces graphiques integrees viennent
+ensuite.** Sur une machine avec un processeur a partie graphique integree en plus
+d'une carte dediee, l'ordre de detection ne correspond pas forcement a celui du
+Gestionnaire des taches : OverlayPerf trie explicitement pour que ce soit toujours
+la carte dediee qui apparaisse en premier.
 
-**Ce premier avertissement ne couvre que « rien trouve ».** Un executable trouve
-et lance avec succes (le processus demarre normalement) peut malgre tout ne
-jamais transmettre une seule trame — le cas du piege de nommage ci-dessus, ou
-des droits administrateur manquants. Rien dans le cycle de vie du processus ne
-le signale de lui-meme : Overlay verifie donc, 30 secondes apres le demarrage,
-qu'une source trouvee a effectivement produit des trames. Si aucun jeu ne tourne
-encore a ce moment-la, c'est normal et le message le precise ; si un jeu tourne
-deja sans que rien ne remonte, il pointe directement vers les deux causes les
-plus frequentes :
-
-```
-Attention : Source FPS « presentmon » demarree, mais aucune trame recue apres 30 s.
-  Si aucun jeu n'est lance pour l'instant, c'est normal : rien a mesurer
-  encore, ce message n'indique rien d'anormal. Si un jeu tourne deja :
-  - « PresentMon.exe » designe deux outils differents publies par le meme
-    projet : l'outil console attendu ici, et l'application graphique
-    « PresentMon Capture » (fenetre avec reglages, hotkeys, auto-target)
-    qui porte le meme nom de fichier mais ne produit pas le meme flux.
-    Verifiez lequel est reellement installe sur le PATH, ou indiquez le
-    chemin exact du console dans [fps] presentmon_path pour lever toute
-    ambiguite (...) ;
-  - PresentMon a besoin des droits administrateur : relancez Overlay en
-    administrateur.
-```
-
-### Temperatures, ventilateurs, charges
-
-| Plateforme | Source | Couverture |
-| --- | --- | --- |
-| Linux | `/sys/class/hwmon` | temperatures CPU/NVMe, vitesses de rotation, rapport PWM, puissances |
-| Linux | powercap / RAPL | **consommation du processeur** : boitier, coeurs, memoire |
-| Linux | sysfs `amdgpu` | GPU AMD : charge, VRAM, temperature, ventilateur, **consommation** |
-| Windows | LibreHardwareMonitor | temperatures, ventilateurs, consommations, frequences |
-| Toutes | NVML / `nvidia-smi` | GPU NVIDIA : charge, temperature, VRAM, ventilateur, **consommation**, frequences |
-| Toutes | psutil | charge CPU (globale ou par coeur), frequence, RAM, swap, debits disque et reseau |
-
-**Sous Windows, une etape manuelle est indispensable.** Le systeme n'expose aucune
-API publique pour les temperatures et les ventilateurs : il faut un pilote en mode
-noyau. Installez [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor),
-lancez-le **en administrateur**, puis activez `Options > Remote Web Server > Run`.
-Overlay interroge alors son serveur interne sur `http://127.0.0.1:8085/data.json`.
-Sans lui, vous aurez la charge CPU, la memoire et le GPU NVIDIA, mais ni les
-temperatures de la carte mere ni les vitesses de ventilateur — et Overlay
-l'annoncera clairement au demarrage (voir ci-dessous), plutot que de laisser
-ces mesures manquer sans explication.
-
-**Pour ne plus y penser a chaque session**, LibreHardwareMonitor retient ses
-propres reglages d'une fois sur l'autre (verifie dans son code source, pas
-suppose) : cochez, dans son menu **Options**, `Remote Web Server > Run`,
-`Start Minimized` puis `Run on Windows Startup`. Il demarre ensuite deja
-en administrateur et minimise a chaque ouverture de session Windows, serveur
-actif, sans autre intervention. PresentMon, lui, n'a jamais besoin d'etre
-lance a la main : Overlay le demarre et l'arrete lui-meme a chaque session.
-
-**Overlay previent si LibreHardwareMonitor est injoignable.** Au lancement de
-`overlay run`, `overlay serve` ou `overlay overlay`, si la source thermique
-attendue manque, un avertissement clair s'affiche — la marche a suivre
-ci-dessus, sans avoir a chercher dans les journaux :
-
-```
-Attention : LibreHardwareMonitor injoignable sur http://127.0.0.1:8085/data.json : les
-temperatures, ventilateurs et consommations cote carte mere resteront absents.
-  1. Lancez LibreHardwareMonitor en administrateur.
-  2. Menu Options > Remote Web Server > Run.
-  3. Pour ne plus y penser : Options > Start Minimized, puis Run on Windows Startup.
-```
-
-`overlay sensors` l'affiche egalement. Le message disparait des que la source
-concernee redevient joignable ; le desactiver explicitement dans la
-configuration (`sensors.disabled = ["lhm"]`) le fait taire, sans avertissement
-ni requete reseau superflue.
-
-### Consommation electrique
-
-Les deux composants qui pesent dans la facture et dans la chaleur du boitier ont
-chacun une cle dediee, affichee par defaut dans l'overlay :
-
-| Cle | Composant | Source |
-| --- | --- | --- |
-| `cpu.temp` / `cpu.power` | processeur | hwmon+RAPL sous Linux, LibreHardwareMonitor sous Windows |
-| `gpu.N.power` | carte graphique | NVML/`nvidia-smi`, sysfs `amdgpu`, LibreHardwareMonitor |
-
-Sous Linux, `cpu.power` se decline en `cpu.power.core`, `cpu.power.uncore` et
-`cpu.power.dram` quand le processeur expose ces sous-domaines — ce sont des parts
-du total, jamais des supplements. Sur une machine bi-socket, `cpu.power` est la
-somme des boitiers, chacun restant disponible en `cpu.package.N.power`.
-
-**RAPL compte de l'energie, pas une puissance.** Overlay deduit les watts de la
-variation du compteur entre deux cycles : la toute premiere lecture ne produit donc
-rien, et `overlay sensors` echantillonne deux fois pour cette raison.
-
-**Ces compteurs sont souvent reserves a root.** Depuis la CVE-2020-8694 — une
-mesure fine de la consommation permet des attaques par canal auxiliaire — la
-plupart des distributions restreignent leur lecture. Overlay se desactive alors
-proprement en expliquant la marche a suivre plutot que d'afficher un vide. Pour les
-ouvrir :
-
-```bash
-sudo chmod a+r /sys/class/powercap/*/energy_uj   # a refaire au redemarrage
-```
-
-Pour que ce soit permanent, une regle udev est preferable a un `chmod` manuel.
-
-**La consommation de la carte graphique** sort sous la meme cle `gpu.N.power`
-chez NVIDIA et chez AMD, avec la limite de la carte (`power limit` / `power1_cap`)
-comme pleine echelle de la jauge. Une seule ligne de configuration couvre donc les
-deux fabricants. Il en va de meme pour `gpu.N.load`, `gpu.N.temp`, `gpu.N.fan` et
-`gpu.N.vram.used`. Seule exception : un GPU AMD **sous Windows** passe par
-LibreHardwareMonitor et garde des cles `lhm.*` propres a la machine, que
-`overlay sensors` vous donnera.
-
-**`cpu.temp` et `cpu.power` fonctionnent aussi sous Windows.** LibreHardwareMonitor
-nomme sa sonde processeur d'apres le modele exact de la puce (« Core (Tctl/Tdie) »
-chez AMD, « CPU Package » chez Intel...), ce qui rend son intitule imprevisible
-d'une machine a l'autre. Overlay reconnait ces intitules — verifies contre le code
-source de LibreHardwareMonitor, pas devines — et republie la bonne sonde (celle du
-processeur entier, jamais un coeur ni un CCD isole) sous les cles stables
-`cpu.temp`/`cpu.power`, en plus de sa cle `lhm.*` d'origine que `overlay sensors`
-continue d'afficher pour le detail complet.
-
-**L'index d'un GPU NVIDIA ne correspond pas forcement au numero que lui donne
-Windows.** NVML/`nvidia-smi` ne numerotent que les cartes NVIDIA : avec un seul
-GPU dedie, il porte toujours l'index 0 pour ces outils, meme si le Gestionnaire
-des taches Windows — qui compte lui tous les adaptateurs, GPU integre compris —
-l'appelle « GPU 1 ». Pour lever toute ambiguite, l'etiquette affichee reprend le
-modele de la carte plutot qu'un numero (« RTX 4070 » au lieu de « GPU 0 ») des
-qu'une seule carte NVIDIA est presente ; avec plusieurs cartes identiques, ou
-l'index redevient la seule facon de les distinguer, il est ajoute en suffixe
-(« RTX 4090 #0 », « RTX 4090 #1 »). Les cles (`gpu.0.temp`, `gpu.1.temp`...) ne
-changent pas : seul l'affichage en est different.
+**Ventilateurs GPU en tours/minute.** En plus du pourcentage (`gpu.0.fan`), la
+vitesse reelle est publiee sous `gpu.0.fan.rpm` (et `gpu.0.fan.2.rpm` pour une
+carte a plusieurs ventilateurs) quand la sonde existe.
 
 **La RAM et la VRAM s'affichent « utilise / total »**, en Gio plutot qu'un chiffre
 brut en MiB sans repere (`gpu.0.vram.used` : « 2.4 / 16.0 Go », `memory.used` :
-« 11.5 / 32.0 Go »), sur l'overlay comme sur l'application mobile. Le total vient
-de la meme information que la pleine echelle de la jauge, deja fournie par les
-backends : aucune mesure supplementaire n'est necessaire pour ca.
+« 11.5 / 32.0 Go »), sur l'overlay comme sur l'application. Le total vient de la
+meme information que la pleine echelle de la jauge, deja fournie par les backends.
 
-Quand plusieurs sources publient la meme cle, la plus precise l'emporte, et les
-temperatures psutil sont automatiquement desactivees des qu'une source dediee est
-disponible. Sous Linux, le sous-repertoire hwmon d'une carte AMD est lu par le
-backend `amdgpu` puis ignore par le backend hwmon generique : sa consommation
-n'apparait donc qu'une fois. Sur une machine hybride, les cartes AMD sont
-numerotees a la suite des cartes NVIDIA, pour que les deux ne se disputent pas
-`gpu.0`.
-
-`overlay sensors` liste les cles reellement disponibles sur votre machine ; ce
-sont elles qu'on met dans `[overlay] metrics`.
+`OverlayPerf.exe --sensors` liste les cles reellement disponibles sur votre
+machine ; ce sont elles qu'on met dans `[overlay] metrics` (ou qu'on coche/decoche
+dans la fenetre Parametres…).
 
 
 ## Configuration
 
 ```bash
-overlay config --init   # cree le fichier a partir du modele commente
-overlay config --path   # affiche son emplacement
+OverlayPerf.exe --config-init   # cree le fichier a partir du modele commente
 ```
 
-Le fichier vit dans le repertoire de configuration de l'utilisateur
-(`~/.config/overlay/config.toml` sous Linux,
-`%LOCALAPPDATA%\overlay\config.toml` sous Windows) ; `--config` accepte un autre
-chemin. Toute option omise garde sa valeur par defaut, et une valeur invalide est
-refusee au demarrage avec un message explicite plutot qu'en cours de route.
-
-Le modele complet et commente se trouve dans
-[`src/overlay/data/config.example.toml`](src/overlay/data/config.example.toml).
-Les reglages les plus utiles :
+Le fichier vit dans `%LOCALAPPDATA%\overlay\config.toml` ; `--config` accepte un
+autre chemin. Toute option omise garde sa valeur par defaut, et une valeur
+invalide est refusee au demarrage avec un message explicite plutot qu'en cours de
+route. La plupart des reglages d'affichage (position, opacite du fond et des
+informations, police, colonnes, raccourcis, mesures affichees) se regnent
+directement depuis la fenetre **Parametres…** de l'icone de zone de notification,
+qui ecrit dans ce meme fichier sans toucher a ses commentaires.
 
 ```toml
 [general]
@@ -480,11 +270,12 @@ poll_interval = 1.0        # cadence d'echantillonnage, en secondes
 
 [overlay]
 position = "top-left"      # ou top-right, bottom-left, bottom-right
-opacity = 0.85
+opacity = 0.75              # opacite du fond (cartouche)
+text_opacity = 1.0           # opacite des informations (texte), independante
 columns = 2                # repartir les lignes sur plusieurs colonnes
 hotkey = "<ctrl>+<alt>+o"  # raccourci global d'affichage
 hotkey_quit = "<ctrl>+<alt>+q"  # raccourci global pour quitter
-tray_icon = true           # icone de zone de notification (appairage, quitter)
+tray_icon = true           # icone de zone de notification
 visible_at_start = true
 metrics = ["fps.current", "cpu.load", "cpu.power", "gpu.0.temp", "gpu.0.power", "fan.*"]
 
@@ -511,6 +302,7 @@ WebSocket depuis un navigateur.
 | `GET /api/metrics` | Dernier instantane. `?keys=cpu.load,gpu.*` pour filtrer |
 | `GET /api/sensors` | Backends actifs et catalogue des mesures disponibles |
 | `GET /api/history` | Jusqu'a 1000 instantanes passes, pour tracer des courbes |
+| `GET /api/overlay` | Selection et mise en forme de l'overlay a l'ecran (position, opacites, cles affichees, dans l'ordre) |
 | `GET /api/fps` | Detail du compteur d'images (moyenne, centiles bas, application) |
 | `POST /api/fps/frame` | Publier une trame : `{"frame_time_ms": 8.33}` |
 | `WS /ws` | Flux temps reel, un message JSON par cycle de collecte |
@@ -519,6 +311,10 @@ WebSocket depuis un navigateur.
 curl -H "Authorization: Bearer $JETON" \
      "http://127.0.0.1:8777/api/metrics?keys=cpu.load,gpu.0.temp"
 ```
+
+`GET /api/overlay` est ce qui permet a l'application Android d'afficher exactement
+la meme chose que l'overlay a l'ecran (page « Overlay »), sans dupliquer la
+configuration.
 
 
 ## Securite
@@ -533,7 +329,9 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
 - Pour un usage strictement local, mettez `host = "127.0.0.1"`.
 - Sur le reseau local, le trafic est en HTTP simple : c'est adapte a un reseau
   domestique de confiance. **Pour un acces depuis l'exterieur, passez par un
-  tunnel chiffre** — voir la section dediee plus haut.
+  tunnel chiffre** — voir la section dediee plus haut. (L'application Android
+  declare volontairement `usesCleartextTraffic` pour cette meme raison : voir
+  [mobile/README.md](mobile/README.md).)
 
 
 ## Limites connues
@@ -543,56 +341,18 @@ Il publie l'etat detaille de la machine : traitez le jeton comme un mot de passe
   plein ecran fenetre ou sans bordure — le mode par defaut de la plupart des jeux
   recents — l'overlay s'affiche normalement. Le telephone reste de toute facon une
   sortie utilisable, et c'est meme sa principale raison d'etre.
-- **Wayland.** Le positionnement absolu des fenetres et les raccourcis clavier
-  globaux y sont restreints par conception. L'overlay fonctionne sous X11 ou XWayland ;
-  sous Wayland pur, le raccourci peut rester inactif — Overlay le signale au
-  demarrage plutot que d'echouer en silence.
-- **PresentMon** demande les droits administrateur.
+- **PresentMon** demande les droits administrateur, deja acquis au demarrage.
 - **Ventilateurs a zero.** Une vitesse de 0 RPM est generalement un connecteur
-  libre sur la carte mere, pas une panne.
+  libre sur la carte mere, ou un mode zero-fan au repos, pas une panne.
+- **Windows uniquement.** Cette version ne couvre pas Linux/macOS.
 
 
 ## Developpement
 
-```bash
-pip install -e ".[dev,overlay]"
-python -m pytest -q                  # 293 tests
-python -m ruff check src tests tools
-python tools/make_icons.py           # regenere les icones de la PWA
-
-# Rejoue la suite avec une horloge monotone a faible resolution
-python -m pytest -q -p tests.coarse_clock
-```
-
-Ce dernier point merite un mot. Sous Windows, avant Python 3.13,
-`time.monotonic()` avance par pas d'environ 15 ms : deux appels rapproches
-renvoient la meme valeur. Tout ce qui deduit une grandeur d'un ecart de temps —
-les debits disque et reseau, la peremption du flux d'images — s'y comporte
-autrement, et la CI ne le revelait qu'apres coup. Le greffon `tests.coarse_clock`
-quantifie l'horloge de la meme facon et rend le probleme reproductible sur
-n'importe quelle machine ; un job dedie le rejoue a chaque push.
-
-Les tests de l'overlay demandent PySide6 et sont sautes automatiquement s'il est
-absent ; en environnement sans affichage, `QT_QPA_PLATFORM=offscreen` suffit. La
-logique de connexion de l'application mobile est testee en chargeant `app.js` dans
-un contexte Node muni d'un DOM et d'un WebSocket factices (`tests/webapp/`) ; ces
-tests sont sautes si Node n'est pas installe.
-
-Organisation du code :
-
-| Chemin | Role |
-| --- | --- |
-| `src/overlay/models.py` | `Reading` et `Snapshot`, le vocabulaire partage par tout le reste |
-| `src/overlay/sensors/` | Un module par source materielle, plus la detection automatique |
-| `src/overlay/fps/` | Calcul des metriques de fluidite et sources de trames |
-| `src/overlay/hub.py` | Boucle d'echantillonnage et diffusion aux abonnes |
-| `src/overlay/server/` | API HTTP/WebSocket, jeton, appairage |
-| `src/overlay/webapp/` | L'application mobile (HTML/CSS/JS, sans dependance) |
-| `src/overlay/overlay/` | Fenetre Qt et raccourci global |
-
-Ajouter une source de capteurs revient a implementer `SensorBackend` (`available()`
-et `read()`) puis a la declarer dans `detect_backends()` : l'overlay, l'API et
-l'application mobile la reprennent sans modification.
+Voir [dotnet/README.md](dotnet/README.md) (compilation de `OverlayPerf.exe`,
+structure du code, tests) et [mobile/README.md](mobile/README.md) (compilation de
+l'APK, structure du code Flutter, tests) pour les instructions completes de chaque
+application.
 
 
 ## Licence

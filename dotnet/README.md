@@ -1,9 +1,9 @@
 # OverlayPerf — agent Windows en C#/.NET
 
-Réécriture de l'agent Python en **exécutable Windows unique** (`OverlayPerf.exe`), sans
-Python ni dépendance à installer. Même rôle : overlay de monitoring par-dessus le jeu
-(FPS, températures, charges, consommations, ventilateurs), icône dans la zone de
-notification, et serveur pour l'application mobile.
+**Exécutable Windows unique** (`OverlayPerf.exe`), sans rien d'autre à installer.
+Overlay de monitoring par-dessus le jeu (FPS, températures, charges, consommations,
+ventilateurs), icône dans la zone de notification, et serveur pour l'application
+mobile.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -17,9 +17,12 @@ notification, et serveur pour l'application mobile.
 └──────────────────────────────────────────────────────────┘
 ```
 
-## Ce qui change par rapport à l'agent Python
+## Historique : pourquoi cette réécriture
 
-| | Agent Python | OverlayPerf.exe |
+Ce projet a démarré comme un agent Python (multiplateforme). Cette version C#/.NET l'a
+entièrement remplacé sous Windows, avant que l'agent Python ne soit retiré du dépôt.
+
+| | Ancien agent Python | OverlayPerf.exe |
 | --- | --- | --- |
 | Installation | Python + `pip install` + PySide6 | un seul `.exe` (autonome, ~75 Mo) |
 | Droits administrateur | à penser soi-même (terminal en admin) | **invite UAC au lancement**, imposée par le manifeste |
@@ -59,9 +62,10 @@ mesures par famille, avec le bouton « Mesures » pour en masquer sur ce télép
 Depuis un terminal, quelques commandes de diagnostic (l'invite UAC apparaît aussi) :
 
 ```bash
-OverlayPerf.exe --sensors      # capteurs détectés et instantané des mesures
-OverlayPerf.exe --pair         # adresse et QR code pour le téléphone
-OverlayPerf.exe --config-init  # écrire un config.toml d'exemple
+OverlayPerf.exe --sensors        # capteurs détectés et instantané des mesures
+OverlayPerf.exe --pair           # adresse et QR code pour le téléphone
+OverlayPerf.exe --pair --rotate  # nouveau jeton (invalide les téléphones déjà appariés)
+OverlayPerf.exe --config-init    # écrire un config.toml d'exemple
 OverlayPerf.exe --help
 ```
 
@@ -78,7 +82,7 @@ trace. Le menu « Ouvrir le journal du jour » y mène directement.
 
 ## Configuration
 
-Même fichier que l'agent Python. Nouveautés :
+Même fichier et mêmes clés que l’ancien agent Python. Nouveautés :
 
 ```toml
 [general]
@@ -113,7 +117,7 @@ Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0) sous
 
 ```bash
 cd dotnet
-dotnet test                                                   # 72 tests
+dotnet test                                                   # 76 tests
 dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
 ```
 
@@ -121,6 +125,11 @@ dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
 `OverlayPerf/app.manifest` porte `requireAdministrator` : c'est lui qui déclenche l'invite UAC.
 Pour tester sans élévation pendant le développement, lancer la DLL directement contourne le
 manifeste : `dotnet bin/Release/net8.0-windows/win-x64/OverlayPerf.dll --no-elevate`.
+
+`OverlayPerf/app.ico` (même dessin que `webapp/icon-512.png` et l'icône Android) est à la
+fois l'icône de l'exécutable (`ApplicationIcon`) et celle de la zone de notification : la
+zone de notification reprend directement l'icône de l'exe (`Icon.ExtractAssociatedIcon`)
+plutôt que d'embarquer une seconde image à maintenir séparément.
 
 ## Structure
 
@@ -130,9 +139,9 @@ OverlayPerf/
   App/Runtime.cs        assemblage capteurs + FPS + hub + serveur, texte d'état
   Config/               AppConfig (TOML), chemins, modèle, écriture ciblée de config.toml (TomlPatcher)
   Logging/LogSetup.cs   Serilog : fichier journalier + console si terminal
-  Models/               Reading, Snapshot (JSON identique à l'agent Python)
+  Models/               Reading, Snapshot (même format JSON que l’ancien agent Python)
   Sensors/              LibreHardwareMonitor intégré, compteurs Windows, nvidia-smi, simulation
-  Fps/                  FrameTimeTracker, parseur CSV PresentMon, sous-processus PresentMon
+  Fps/                  FrameTimeTracker, parseur CSV PresentMon, sous-processus PresentMon, ciblage par application au premier plan
   Hub/MetricsHub.cs     boucle de collecte, historique, diffusion aux abonnés
   Server/               Kestrel : API, WebSocket, jeton, verrouillage, appairage/QR, PWA embarquée
   Ui/                   overlay WinForms, icône de notification, raccourcis globaux, Paramètres, appairage

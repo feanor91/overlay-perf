@@ -157,6 +157,21 @@ public class ConfigTests
     }
 }
 
+public class TokenRotationTests
+{
+    [Fact]
+    public void RefuseDeRemplacerUnJetonFixeDansLaConfiguration()
+    {
+        // Rotation "reussie" mais silencieusement sans effet : ResolveToken continuerait
+        // de renvoyer le jeton fixe, jamais le nouveau. Le refus explicite evite ce piege.
+        // Le guard leve avant tout acces disque : ce test ne touche jamais le vrai jeton
+        // de la machine (%LOCALAPPDATA%\overlay\token, sans point d'injection pour les tests).
+        var config = AppConfig.Parse("[server]\ntoken = \"fixe-a-la-main\"");
+        var error = Assert.Throws<ConfigException>(() => Paths.RotateToken(config));
+        Assert.Contains("token", error.Message);
+    }
+}
+
 public class AuthTests
 {
     [Fact]

@@ -107,3 +107,30 @@ jobs:
         run: |
           python tools/make_icons.py
           git diff --exit-code -- src/overlay/webapp
+
+  dotnet:
+    # Executable Windows (dotnet/) : compilation, tests unitaires, puis publication de
+    # OverlayPerf.exe en artefact telechargeable depuis la page du run.
+    name: OverlayPerf.exe (C#/.NET 8)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restaurer
+        run: dotnet restore dotnet/OverlayPerf.sln
+
+      - name: Tests
+        run: dotnet test dotnet/OverlayPerf.sln --no-restore -c Release
+
+      - name: Publier l'executable unique
+        run: dotnet publish dotnet/OverlayPerf/OverlayPerf.csproj --no-restore -c Release -o dotnet/publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OverlayPerf-win-x64
+          path: dotnet/publish/OverlayPerf.exe
+          if-no-files-found: error

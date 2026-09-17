@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OverlayPerf", "OverlayPerf\OverlayPerf.csproj", "{6DD52A11-FE28-4B58-BC27-13B0462FCA69}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OverlayPerf.Tests", "OverlayPerf.Tests\OverlayPerf.Tests.csproj", "{76CFC773-9BE3-490E-8C9F-03EBB714F2EE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6DD52A11-FE28-4B58-BC27-13B0462FCA69}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DD52A11-FE28-4B58-BC27-13B0462FCA69}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DD52A11-FE28-4B58-BC27-13B0462FCA69}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DD52A11-FE28-4B58-BC27-13B0462FCA69}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76CFC773-9BE3-490E-8C9F-03EBB714F2EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76CFC773-9BE3-490E-8C9F-03EBB714F2EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76CFC773-9BE3-490E-8C9F-03EBB714F2EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76CFC773-9BE3-490E-8C9F-03EBB714F2EE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

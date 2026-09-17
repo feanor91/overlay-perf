@@ -1,0 +1,124 @@
+# OverlayPerf — agent Windows en C#/.NET
+
+Réécriture de l'agent Python en **exécutable Windows unique** (`OverlayPerf.exe`), sans
+Python ni dépendance à installer. Même rôle : overlay de monitoring par-dessus le jeu
+(FPS, températures, charges, consommations, ventilateurs), icône dans la zone de
+notification, et serveur pour l'application mobile.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  OverlayPerf.exe (C#/.NET 8, droits administrateur)      │
+│                                                          │
+│  capteurs ──► hub ──┬──► overlay WinForms (click-through) │
+│  (LibreHardware-    │                                    │
+│   Monitor intégré,  └──► serveur Kestrel HTTP/WS ────────┼──► téléphone (PWA)
+│   compteurs Windows)                                     │
+│  + PresentMon (FPS)      icône de notification, journaux │
+└──────────────────────────────────────────────────────────┘
+```
+
+## Ce qui change par rapport à l'agent Python
+
+| | Agent Python | OverlayPerf.exe |
+| --- | --- | --- |
+| Installation | Python + `pip install` + PySide6 | un seul `.exe` (autonome, ~75 Mo) |
+| Droits administrateur | à penser soi-même (terminal en admin) | **invite UAC au lancement**, imposée par le manifeste |
+| Températures / ventilateurs | LibreHardwareMonitor **à lancer à part**, serveur web à activer | bibliothèque LibreHardwareMonitor **intégrée** : rien à installer |
+| GPU NVIDIA | NVML ou `nvidia-smi` | LibreHardwareMonitor (NVML) ; `nvidia-smi` en secours |
+| Diagnostic | messages console | **journal quotidien** dans `%LOCALAPPDATA%\overlay\logs`, notifications dans la zone de notification |
+| PresentMon | erreurs de lancement invisibles (stderr jeté) | stderr capturé et journalisé, relance automatique, message clair si droits insuffisants |
+| Linux (MangoHud, hwmon, RAPL) | oui | non : Windows uniquement |
+
+La configuration (`%LOCALAPPDATA%\overlay\config.toml`), le jeton, l'API HTTP/WebSocket et
+l'application mobile sont **identiques** : un téléphone déjà appairé continue de fonctionner,
+un `config.toml` existant est relu tel quel (les options propres à Linux sont ignorées, avec un
+avertissement dans le journal).
+
+## Utilisation
+
+1. Téléchargez l'outil console [PresentMon](https://github.com/GameTechDev/PresentMon/releases)
+   (`PresentMon-<version>-x64.exe`) et placez-le **à côté de `OverlayPerf.exe`** — ou indiquez
+   son chemin dans `[fps] presentmon_path`. Sans lui, tout fonctionne sauf le FPS.
+2. Double-cliquez sur `OverlayPerf.exe` et acceptez l'invite UAC.
+3. Une notification confirme le démarrage ; l'icône dans la zone de notification donne accès à :
+   - **Afficher / masquer l'overlay** (aussi par `Ctrl+Alt+O`, clic gauche sur l'icône) ;
+   - **Appairer un téléphone…** : QR code et adresse à scanner ;
+   - **Ouvrir le journal du jour**, **le dossier des journaux**, **la configuration** ;
+   - **État…** : capteurs actifs, PresentMon, serveur, avertissements ;
+   - **Quitter** (aussi par `Ctrl+Alt+Q`).
+
+Depuis un terminal, quelques commandes de diagnostic (l'invite UAC apparaît aussi) :
+
+```bash
+OverlayPerf.exe --sensors      # capteurs détectés et instantané des mesures
+OverlayPerf.exe --pair         # adresse et QR code pour le téléphone
+OverlayPerf.exe --config-init  # écrire un config.toml d'exemple
+OverlayPerf.exe --help
+```
+
+Options : `--no-overlay`, `--no-server`, `--mock` (valeurs simulées), `--config <chemin>`.
+
+## Journaux
+
+Un fichier par jour, `overlay-AAAAMMJJ.log`, dans `%LOCALAPPDATA%\overlay\logs` (7 jours
+conservés, niveau réglable par `[general] log_level = "debug"`). On y trouve, dans l'ordre :
+la configuration chargée et ses options inconnues, les droits, chaque composant matériel vu par
+LibreHardwareMonitor et l'ordre des GPU, la ligne de commande PresentMon et **tout ce qu'il écrit
+sur stderr**, la première trame reçue, les connexions du téléphone, et chaque erreur avec sa
+trace. Le menu « Ouvrir le journal du jour » y mène directement.
+
+## Configuration
+
+Même fichier que l'agent Python. Nouveautés :
+
+```toml
+[general]
+log_level = "info"          # debug, info, warning, error
+log_retention_days = 7
+
+[sensors]
+disabled = []               # "lhm", "nvidia", "system"
+```
+
+Les options `[sensors] lhm_url`, `[fps] mangohud_log_dir` et le mode `mangohud` sont acceptés
+mais ignorés (journalisés).
+
+Clés de mesures publiées : `fps.*`, `cpu.load`, `cpu.temp`, `cpu.power`, `cpu.clock`,
+`gpu.N.load|temp|hotspot|fan|vram.used|vram.load|power|clock.core|clock.mem` (la carte dédiée
+est toujours `gpu.0`, les puces intégrées viennent après), `memory.load|used|total|commit`,
+`fan.<composant>.<nom>` (carte mère, AIO), `temp.<disque>`, `network.in|out`,
+`storage.read|write`, et le catalogue brut `lhm.<matériel>.<type>.<sonde>`.
+`OverlayPerf.exe --sensors` liste ce qui existe réellement sur votre machine.
+
+## Compiler
+
+Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0) sous Windows.
+
+```bash
+cd dotnet
+dotnet test                                                   # 61 tests
+dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
+```
+
+`publish\OverlayPerf.exe` est autonome (runtime inclus). Le manifeste
+`OverlayPerf/app.manifest` porte `requireAdministrator` : c'est lui qui déclenche l'invite UAC.
+Pour tester sans élévation pendant le développement, lancer la DLL directement contourne le
+manifeste : `dotnet bin/Release/net8.0-windows/win-x64/OverlayPerf.dll --no-elevate`.
+
+## Structure
+
+```
+OverlayPerf/
+  Program.cs            point d'entrée, options, instance unique, élévation, commandes console
+  App/Runtime.cs        assemblage capteurs + FPS + hub + serveur, texte d'état
+  Config/               AppConfig (TOML), chemins, modèle de configuration
+  Logging/LogSetup.cs   Serilog : fichier journalier + console si terminal
+  Models/               Reading, Snapshot (JSON identique à l'agent Python)
+  Sensors/              LibreHardwareMonitor intégré, compteurs Windows, nvidia-smi, simulation
+  Fps/                  FrameTimeTracker, parseur CSV PresentMon, sous-processus PresentMon
+  Hub/MetricsHub.cs     boucle de collecte, historique, diffusion aux abonnés
+  Server/               Kestrel : API, WebSocket, jeton, verrouillage, appairage/QR, PWA embarquée
+  Ui/                   overlay WinForms, icône de notification, raccourcis globaux, dialogue d'appairage
+  webapp/               application mobile (copie de src/overlay/webapp, embarquée dans l'exe)
+OverlayPerf.Tests/      xUnit : tracker, parseur PresentMon, config, auth, appairage, raccourcis
+```

@@ -126,6 +126,22 @@ dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
 Pour tester sans élévation pendant le développement, lancer la DLL directement contourne le
 manifeste : `dotnet bin/Release/net8.0-windows/win-x64/OverlayPerf.dll --no-elevate`.
 
+### Installeur Windows
+
+`installer/OverlayPerf.iss` ([Inno Setup](https://jrsoftware.org/isinfo.php)) enveloppe
+`publish/OverlayPerf.exe` dans un installeur classique (raccourcis menu Démarrer et bureau,
+lancement au démarrage de Windows en option, désinstalleur) :
+
+```bash
+dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish   # d'abord l'exe
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\OverlayPerf.iss
+```
+
+Résultat : `installer/output/OverlayPerf-Setup-<version>.exe`. Compilé automatiquement en CI
+(Inno Setup est préinstallé sur les runners `windows-latest`), artefact `OverlayPerf-Setup`.
+La configuration, le jeton et les journaux (`%LOCALAPPDATA%\overlay`) sont conservés à la
+désinstallation.
+
 `OverlayPerf/app.ico` (même dessin que `webapp/icon-512.png` et l'icône Android) est à la
 fois l'icône de l'exécutable (`ApplicationIcon`) et celle de la zone de notification : la
 zone de notification reprend directement l'icône de l'exe (`Icon.ExtractAssociatedIcon`)

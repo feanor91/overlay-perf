@@ -37,6 +37,16 @@ jobs:
           path: dotnet/publish/OverlayPerf.exe
           if-no-files-found: error
 
+      - name: Compiler l'installeur (Inno Setup, preinstalle sur windows-latest)
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" dotnet/installer/OverlayPerf.iss'
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OverlayPerf-Setup
+          path: dotnet/installer/output/OverlayPerf-Setup-*.exe
+          if-no-files-found: error
+
   flutter:
     # Application Android (mobile/) : analyse, tests, puis publication de l'APK
     # (arm64, la quasi-totalite des telephones recents) en artefact du run.

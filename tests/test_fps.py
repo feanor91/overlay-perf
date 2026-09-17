@@ -28,10 +28,13 @@ jeu.exe,99,0x2,DXGI,Application,1.016,N/A
 # (le mode par defaut, et celui qu'Overlay lance) : la colonne se nomme
 # "MsBetweenPresents", avec un M majuscule, contrairement a la version 1.x et aux
 # versions 2.0-2.2 qui utilisaient "msBetweenPresents".
-CSV_V2_DEFAUT = """Application,ProcessID,SwapChainAddress,PresentRuntime,SyncInterval,PresentFlags,AllowsTearing,PresentMode,TimeInSeconds,MsBetweenSimulationStart,MsBetweenPresents,MsBetweenDisplayChange,MsInPresentAPI,MsRenderPresentLatency,MsUntilDisplayed
-jeu.exe,1234,0x1,DXGI,1,0,0,Hardware: Independent Flip,1.000,8.30,8.33,8.33,0.10,5.00,12.00
-jeu.exe,1234,0x1,DXGI,1,0,0,Hardware: Independent Flip,1.008,8.30,8.31,8.31,0.10,5.00,12.00
-"""
+CSV_V2_DEFAUT = (
+    "Application,ProcessID,SwapChainAddress,PresentRuntime,SyncInterval,PresentFlags,"
+    "AllowsTearing,PresentMode,TimeInSeconds,MsBetweenSimulationStart,MsBetweenPresents,"
+    "MsBetweenDisplayChange,MsInPresentAPI,MsRenderPresentLatency,MsUntilDisplayed\n"
+    "jeu.exe,1234,0x1,DXGI,1,0,0,Hardware: Independent Flip,1.000,8.30,8.33,8.33,0.10,5.00,12.00\n"
+    "jeu.exe,1234,0x1,DXGI,1,0,0,Hardware: Independent Flip,1.008,8.30,8.31,8.31,0.10,5.00,12.00\n"
+)
 
 
 # --- Centiles --------------------------------------------------------------

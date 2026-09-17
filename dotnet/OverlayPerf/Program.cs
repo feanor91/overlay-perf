@@ -109,8 +109,11 @@ public static class Program
 
     private static int RunApp(AppConfig config, Options options, ILoggerFactory logs, ILogger log, bool consoleAttached)
     {
-        // Une seule instance : deux PresentMon se disputeraient la session ETW, deux serveurs le port.
-        using var mutex = new Mutex(true, @"Global\OverlayPerf.SingleInstance", out var first);
+        // Une seule instance par configuration : deux PresentMon se disputeraient la session ETW,
+        // deux serveurs le port. Une configuration de test (autre fichier, autre port) reste possible.
+        var configId = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(
+            System.Text.Encoding.UTF8.GetBytes((options.ConfigPath ?? Paths.ConfigFile).ToLowerInvariant())))[..8];
+        using var mutex = new Mutex(true, $@"Global\OverlayPerf.SingleInstance.{configId}", out var first);
         if (!first)
         {
             log.LogWarning("Une autre instance tourne deja : arret");
@@ -202,8 +205,8 @@ public static class Program
         {
             overlay?.ApplySettings(runtime.Hub.Latest);
             host!.ReplaceHotkeys(RegisterHotkeys);
-            log.LogInformation("Parametres appliques : {Position}, opacite {Opacity:P0}, {Count} mesures",
-                config.Overlay.Position, config.Overlay.Opacity, config.Overlay.Metrics.Count);
+            log.LogDebug("Parametres appliques : {Position}, fond {Opacity:P0}, texte {TextOpacity:P0}, {Count} mesures",
+                config.Overlay.Position, config.Overlay.Opacity, config.Overlay.TextOpacity, config.Overlay.Metrics.Count);
         }
 
         void SaveOverlaySettings()

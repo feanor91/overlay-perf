@@ -124,7 +124,7 @@ public class ConfigWriterTests
             File.WriteAllText(path, ConfigTemplate.Text);
             var overlay = new OverlayConfig
             {
-                Position = "bottom-left", Opacity = 0.5, Margin = 10, FontSize = 18, Columns = 2,
+                Position = "bottom-left", Opacity = 0.5, TextOpacity = 0.8, Margin = 10, FontSize = 18, Columns = 2,
                 ClickThrough = false, Hotkey = "<shift>+<f10>", HotkeyQuit = "<shift>+<f11>", VisibleAtStart = false,
                 Metrics = ["gpu.0.fan.rpm", "cpu.temp"],
             };
@@ -133,6 +133,7 @@ public class ConfigWriterTests
             var reloaded = AppConfig.Load(path);
             Assert.Equal("bottom-left", reloaded.Overlay.Position);
             Assert.Equal(0.5, reloaded.Overlay.Opacity);
+            Assert.Equal(0.8, reloaded.Overlay.TextOpacity);
             Assert.Equal(18, reloaded.Overlay.FontSize);
             Assert.Equal("<shift>+<f10>", reloaded.Overlay.Hotkey);
             Assert.False(reloaded.Overlay.VisibleAtStart);

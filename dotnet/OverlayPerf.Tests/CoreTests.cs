@@ -114,6 +114,7 @@ public class ConfigTests
     [InlineData("[fps]\nmode = \"pigeon\"", "mode")]
     [InlineData("[server]\nport = 70000", "port")]
     [InlineData("[overlay]\nopacity = 2.0", "opacity")]
+    [InlineData("[overlay]\ntext_opacity = 0.0", "text_opacity")]
     [InlineData("[overlay]\nposition = \"milieu\"", "position")]
     [InlineData("[server]\ntls_cert = \"c.pem\"", "tls_key")]
     [InlineData("[general]\nmock = \"oui\"", "booleen")]
@@ -143,6 +144,16 @@ public class ConfigTests
         var config = AppConfig.Parse(ConfigTemplate.Text);
         Assert.Empty(config.Warnings);
         Assert.Equal("auto", config.Fps.Mode);
+        Assert.Equal(0.75, config.Overlay.Opacity);
+        Assert.Equal(1.0, config.Overlay.TextOpacity);
+    }
+
+    [Fact]
+    public void DeuxOpacitesIndependantes_FondPossiblementNul()
+    {
+        var config = AppConfig.Parse("[overlay]\nopacity = 0.0\ntext_opacity = 0.4");
+        Assert.Equal(0.0, config.Overlay.Opacity);
+        Assert.Equal(0.4, config.Overlay.TextOpacity);
     }
 }
 

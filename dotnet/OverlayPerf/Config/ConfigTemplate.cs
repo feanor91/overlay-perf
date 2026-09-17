@@ -82,7 +82,11 @@ public static class ConfigTemplate
         # top-left, top-right, bottom-left, bottom-right
         position = "top-left"
         margin = 24
-        opacity = 0.85
+
+        # Opacite du fond (0.0 = pas de cartouche) et des informations (texte), de 0 a 1.
+        opacity = 0.75
+        text_opacity = 1.0
+
         font_size = 14
         columns = 1
 

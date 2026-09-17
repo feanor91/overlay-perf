@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Globalization;
 using OverlayPerf.Config;
@@ -7,7 +8,9 @@ using OverlayPerf.Models;
 namespace OverlayPerf.Ui;
 
 /// <summary>
-/// Fenetre d'overlay : translucide, toujours au premier plan, transparente aux clics.
+/// Fenetre d'overlay : toujours au premier plan, transparente aux clics, dessinee en
+/// transparence par pixel (<c>UpdateLayeredWindow</c>) : le fond et les informations ont
+/// chacun leur opacite, reglables separement.
 /// <para>Limite connue : un jeu en plein ecran exclusif (DirectX) dessine directement sur le
 /// balayage ecran et masque toute fenetre, overlay compris. En plein ecran fenetre ou sans
 /// bordure (le mode par defaut de la plupart des jeux recents) l'overlay s'affiche normalement.</para>
@@ -15,7 +18,6 @@ namespace OverlayPerf.Ui;
 public sealed class OverlayForm : Form
 {
     private static readonly Color BackgroundColor = Color.FromArgb(8, 11, 18);
-    private static readonly Color KeyColor = Color.FromArgb(1, 2, 3);
     private static readonly Color LabelColor = Color.FromArgb(150, 165, 190);
     private static readonly Color ValueColor = Color.FromArgb(235, 240, 248);
     private static readonly Color OkColor = Color.FromArgb(61, 220, 132);
@@ -41,11 +43,8 @@ public sealed class OverlayForm : Form
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
         Text = "Overlay";
-        BackColor = KeyColor;
-        TransparencyKey = KeyColor;
-        Opacity = config.Opacity;
-        DoubleBuffered = true;
-        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        // Ni Opacity ni TransparencyKey : ils feraient passer WinForms par
+        // SetLayeredWindowAttributes, incompatible avec UpdateLayeredWindow.
         _clickThrough = config.ClickThrough;
         _font = CreateFont(config.FontSize);
         Size = new Size(1, 1);
@@ -60,33 +59,6 @@ public sealed class OverlayForm : Form
         }
         font.Dispose();
         return new Font(FontFamily.GenericSansSerif, size, FontStyle.Bold, GraphicsUnit.Point);
-    }
-
-    /// <summary>Relit la configuration (modifiee par la fenetre Parametres) et l'applique sans redemarrer.</summary>
-    public void ApplySettings(Snapshot? latest)
-    {
-        if (Math.Abs(_font.SizeInPoints - _config.FontSize) > 0.01)
-        {
-            _font.Dispose();
-            _font = CreateFont(_config.FontSize);
-        }
-        Opacity = _config.Opacity;
-        if (_clickThrough != _config.ClickThrough)
-        {
-            _clickThrough = _config.ClickThrough;
-            if (IsHandleCreated)
-            {
-                RecreateHandle(); // les styles etendus ne se changent qu'a la creation de la fenetre
-            }
-        }
-        _readings = []; // force le refiltrage avec la nouvelle selection
-        if (latest is not null)
-        {
-            Apply(latest);
-        }
-        ComputeLayout();
-        AdjustGeometry();
-        Invalidate();
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -108,12 +80,41 @@ public sealed class OverlayForm : Form
         }
     }
 
+    // La surface est fournie par UpdateLayeredWindow : rien a peindre par le chemin classique.
+    protected override void OnPaintBackground(PaintEventArgs e) { }
+    protected override void OnPaint(PaintEventArgs e) { }
+
+    /// <summary>Relit la configuration (modifiee par la fenetre Parametres) et l'applique sans redemarrer.</summary>
+    public void ApplySettings(Snapshot? latest)
+    {
+        if (Math.Abs(_font.SizeInPoints - _config.FontSize) > 0.01)
+        {
+            _font.Dispose();
+            _font = CreateFont(_config.FontSize);
+        }
+        if (_clickThrough != _config.ClickThrough)
+        {
+            _clickThrough = _config.ClickThrough;
+            if (IsHandleCreated)
+            {
+                RecreateHandle(); // les styles etendus ne se changent qu'a la creation de la fenetre
+            }
+        }
+        _readings = latest is not null ? Select(latest) : [];
+        ComputeLayout();
+        AdjustGeometry();
+        Render();
+    }
+
     // --- Donnees -----------------------------------------------------------------
+
+    private List<Reading> Select(Snapshot snapshot) =>
+        snapshot.Filter(_config.Metrics).Readings.Where(r => r.Value is not null).ToList();
 
     /// <summary>Remplace les mesures affichees et redimensionne la fenetre si besoin.</summary>
     public void Apply(Snapshot snapshot)
     {
-        var selected = snapshot.Filter(_config.Metrics).Readings.Where(r => r.Value is not null).ToList();
+        var selected = Select(snapshot);
         var changedCount = selected.Count != _readings.Count;
         if (!changedCount && selected.Zip(_readings).All(p => p.First.Key == p.Second.Key && p.First.Value == p.Second.Value && p.First.Label == p.Second.Label))
         {
@@ -125,7 +126,7 @@ public sealed class OverlayForm : Form
         {
             AdjustGeometry();
         }
-        Invalidate();
+        Render();
     }
 
     public void Toggle()
@@ -139,8 +140,21 @@ public sealed class OverlayForm : Form
             ComputeLayout();
             AdjustGeometry();
             Show();
+            Render();
             BringToFront();
         }
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Render();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        Render();
     }
 
     /// <summary>Un jeu qui passe au premier plan peut repasser devant : on reaffirme la position.</summary>
@@ -166,7 +180,8 @@ public sealed class OverlayForm : Form
             _layout = default;
             return;
         }
-        using var g = CreateGraphics();
+        using var bitmap = new Bitmap(1, 1, PixelFormat.Format32bppPArgb);
+        using var g = Graphics.FromImage(bitmap);
         var format = StringFormat.GenericTypographic;
         int Measure(string text) => (int)Math.Ceiling(g.MeasureString(text, _font, PointF.Empty, format).Width);
         var labelWidth = lines.Max(l => Measure(l.Label));
@@ -205,24 +220,39 @@ public sealed class OverlayForm : Form
 
     // --- Rendu --------------------------------------------------------------------
 
-    protected override void OnPaint(PaintEventArgs e)
+    /// <summary>Dessine l'overlay dans une image ARGB et la remet a Windows en une fois.</summary>
+    private void Render()
     {
-        var g = e.Graphics;
-        g.Clear(KeyColor);
-        var lines = Lines();
-        if (lines.Count == 0 || _layout.Width == 0)
+        if (!IsHandleCreated || !Visible) return;
+        var width = Math.Max(1, _layout.Width);
+        var height = Math.Max(1, _layout.Height);
+        using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppPArgb);
+        if (_layout.Width > 0)
         {
-            return;
+            using var g = Graphics.FromImage(bitmap);
+            Draw(g);
         }
+        Push(bitmap);
+    }
+
+    private void Draw(Graphics g)
+    {
+        g.Clear(Color.Transparent);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        // Niveaux de gris, pas ClearType : ce dernier suppose un fond opaque.
+        g.TextRenderingHint = TextRenderingHint.AntiAlias;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+        var backgroundAlpha = (int)Math.Round(Math.Clamp(_config.Opacity, 0, 1) * 255);
+        var textAlpha = Math.Clamp(_config.TextOpacity, 0, 1);
 
         using (var background = RoundedRect(new Rectangle(0, 0, _layout.Width - 1, _layout.Height - 1), 10))
-        using (var brush = new SolidBrush(BackgroundColor))
+        using (var brush = new SolidBrush(Color.FromArgb(backgroundAlpha, BackgroundColor)))
         {
             g.FillPath(brush, background);
         }
 
+        var lines = Lines();
         var columnWidth = _layout.LabelWidth + LabelValueGap + _layout.ValueWidth;
         var emSize = _font.SizeInPoints * g.DpiY / 72f;
         var format = StringFormat.GenericTypographic;
@@ -233,18 +263,21 @@ public sealed class OverlayForm : Form
             var row = index % _layout.PerColumn;
             var x = InnerMargin + column * (columnWidth + ColumnGap);
             var y = InnerMargin + row * _layout.LineHeight + 2;
-            DrawOutlined(g, label, x, y, emSize, LabelColor, format);
+            DrawOutlined(g, label, x, y, emSize, WithAlpha(LabelColor, textAlpha), textAlpha, format);
             var valueWidth = g.MeasureString(value, _font, PointF.Empty, format).Width;
-            DrawOutlined(g, value, x + columnWidth - valueWidth, y, emSize, color, format);
+            DrawOutlined(g, value, x + columnWidth - valueWidth, y, emSize, WithAlpha(color, textAlpha), textAlpha, format);
         }
     }
 
+    private static Color WithAlpha(Color color, double factor) =>
+        Color.FromArgb((int)Math.Round(color.A * factor), color.R, color.G, color.B);
+
     /// <summary>Texte cerne de noir : lisible sur un fond de jeu clair comme sombre.</summary>
-    private void DrawOutlined(Graphics g, string text, float x, float y, float emSize, Color color, StringFormat format)
+    private void DrawOutlined(Graphics g, string text, float x, float y, float emSize, Color color, double alpha, StringFormat format)
     {
         using var path = new GraphicsPath();
         path.AddString(text, _font.FontFamily, (int)_font.Style, emSize, new PointF(x, y), format);
-        using var pen = new Pen(OutlineColor, 2.4f) { LineJoin = LineJoin.Round };
+        using var pen = new Pen(WithAlpha(OutlineColor, alpha), 2.4f) { LineJoin = LineJoin.Round };
         g.DrawPath(pen, path);
         using var brush = new SolidBrush(color);
         g.FillPath(brush, path);
@@ -260,6 +293,38 @@ public sealed class OverlayForm : Form
         path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
         path.CloseFigure();
         return path;
+    }
+
+    /// <summary>Transmet l'image a la fenetre en couches : Windows la compose lui-meme, alpha compris.</summary>
+    private void Push(Bitmap bitmap)
+    {
+        var screenDc = NativeMethods.GetDC(IntPtr.Zero);
+        var memDc = NativeMethods.CreateCompatibleDC(screenDc);
+        var hBitmap = IntPtr.Zero;
+        var previous = IntPtr.Zero;
+        try
+        {
+            hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
+            previous = NativeMethods.SelectObject(memDc, hBitmap);
+            var size = new NativeMethods.SIZE { cx = bitmap.Width, cy = bitmap.Height };
+            var source = new NativeMethods.POINT { x = 0, y = 0 };
+            var destination = new NativeMethods.POINT { x = Left, y = Top };
+            var blend = new NativeMethods.BLENDFUNCTION
+            {
+                BlendOp = NativeMethods.AC_SRC_OVER,
+                BlendFlags = 0,
+                SourceConstantAlpha = 255,
+                AlphaFormat = NativeMethods.AC_SRC_ALPHA,
+            };
+            NativeMethods.UpdateLayeredWindow(Handle, screenDc, ref destination, ref size, memDc, ref source, 0, ref blend, NativeMethods.ULW_ALPHA);
+        }
+        finally
+        {
+            if (previous != IntPtr.Zero) NativeMethods.SelectObject(memDc, previous);
+            if (hBitmap != IntPtr.Zero) NativeMethods.DeleteObject(hBitmap);
+            NativeMethods.DeleteDC(memDc);
+            NativeMethods.ReleaseDC(IntPtr.Zero, screenDc);
+        }
     }
 
     // --- Mise en forme des valeurs -----------------------------------------------

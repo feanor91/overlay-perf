@@ -243,6 +243,7 @@ public sealed class WebServer : IAsyncDisposable
                 patterns = overlay.Metrics,
                 position = overlay.Position,
                 opacity = overlay.Opacity,
+                text_opacity = overlay.TextOpacity,
                 columns = overlay.Columns,
                 enabled = overlay.Enabled,
             });

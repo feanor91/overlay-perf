@@ -158,6 +158,7 @@ public static class ConfigWriter
             ["position"] = TomlPatcher.String(overlay.Position),
             ["margin"] = TomlPatcher.Int(overlay.Margin),
             ["opacity"] = TomlPatcher.Double(overlay.Opacity),
+            ["text_opacity"] = TomlPatcher.Double(overlay.TextOpacity),
             ["font_size"] = TomlPatcher.Int(overlay.FontSize),
             ["columns"] = TomlPatcher.Int(overlay.Columns),
             ["click_through"] = TomlPatcher.Bool(overlay.ClickThrough),

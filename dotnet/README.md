@@ -42,7 +42,8 @@ avertissement dans le journal).
 2. Double-cliquez sur `OverlayPerf.exe` et acceptez l'invite UAC.
 3. Une notification confirme le démarrage ; l'icône dans la zone de notification donne accès à :
    - **Afficher / masquer l'overlay** (aussi par `Ctrl+Alt+O`, clic gauche sur l'icône) ;
-   - **Paramètres…** : coin de l'écran, opacité, marge, police, colonnes, click-through,
+   - **Paramètres…** : coin de l'écran, **opacité du fond et opacité des informations** (deux
+     curseurs, aperçu en direct), marge, police, colonnes, click-through,
      raccourcis, et la liste des mesures de l'overlay à cocher/décocher et ordonner
      (« Appliquer » agit à chaud, « OK » enregistre dans `config.toml` en gardant ses commentaires) ;
    - **Appairer un téléphone…** : QR code et adresse à scanner ;
@@ -86,7 +87,14 @@ log_retention_days = 7
 
 [sensors]
 disabled = []               # "lhm", "nvidia", "system"
+
+[overlay]
+opacity = 0.75              # fond (cartouche), 0.0 = aucun fond
+text_opacity = 1.0          # informations (texte et liseré)
 ```
+
+L'overlay est dessiné en transparence par pixel (`UpdateLayeredWindow`) : les deux opacités
+sont indépendantes, et le texte garde son liseré net quelle que soit la transparence du fond.
 
 Les options `[sensors] lhm_url`, `[fps] mangohud_log_dir` et le mode `mangohud` sont acceptés
 mais ignorés (journalisés).
@@ -105,7 +113,7 @@ Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0) sous
 
 ```bash
 cd dotnet
-dotnet test                                                   # 70 tests
+dotnet test                                                   # 72 tests
 dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
 ```
 

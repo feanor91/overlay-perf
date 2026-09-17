@@ -28,8 +28,10 @@ public sealed class SettingsDialog : Form
     private readonly OverlaySnapshot _original;
 
     private readonly ComboBox _position = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-    private readonly TrackBar _opacity = new() { Minimum = 5, Maximum = 100, TickFrequency = 5, Width = 220 };
+    private readonly TrackBar _opacity = new() { Minimum = 0, Maximum = 100, TickFrequency = 5, Width = 220 };
     private readonly Label _opacityValue = new() { AutoSize = true };
+    private readonly TrackBar _textOpacity = new() { Minimum = 5, Maximum = 100, TickFrequency = 5, Width = 220 };
+    private readonly Label _textOpacityValue = new() { AutoSize = true };
     private readonly NumericUpDown _margin = new() { Minimum = 0, Maximum = 500, Width = 80 };
     private readonly NumericUpDown _fontSize = new() { Minimum = 6, Maximum = 72, Width = 80 };
     private readonly NumericUpDown _columns = new() { Minimum = 1, Maximum = 6, Width = 80 };
@@ -50,15 +52,15 @@ public sealed class SettingsDialog : Form
         public override string ToString() => HasValue ? $"{Label}   [{Key}]" : $"{Label}   [{Key}]  (—)";
     }
 
-    private sealed record OverlaySnapshot(string Position, double Opacity, int Margin, int FontSize, int Columns,
+    private sealed record OverlaySnapshot(string Position, double Opacity, double TextOpacity, int Margin, int FontSize, int Columns,
         bool ClickThrough, bool VisibleAtStart, string Hotkey, string HotkeyQuit, List<string> Metrics)
     {
-        public static OverlaySnapshot Of(OverlayConfig c) => new(c.Position, c.Opacity, c.Margin, c.FontSize, c.Columns,
+        public static OverlaySnapshot Of(OverlayConfig c) => new(c.Position, c.Opacity, c.TextOpacity, c.Margin, c.FontSize, c.Columns,
             c.ClickThrough, c.VisibleAtStart, c.Hotkey, c.HotkeyQuit, [.. c.Metrics]);
 
         public void RestoreInto(OverlayConfig c)
         {
-            c.Position = Position; c.Opacity = Opacity; c.Margin = Margin; c.FontSize = FontSize; c.Columns = Columns;
+            c.Position = Position; c.Opacity = Opacity; c.TextOpacity = TextOpacity; c.Margin = Margin; c.FontSize = FontSize; c.Columns = Columns;
             c.ClickThrough = ClickThrough; c.VisibleAtStart = VisibleAtStart; c.Hotkey = Hotkey; c.HotkeyQuit = HotkeyQuit;
             c.Metrics = [.. Metrics];
         }
@@ -116,12 +118,11 @@ public sealed class SettingsDialog : Form
         foreach (var (_, label) in Positions) _position.Items.Add(label);
         Row("Coin de l'ecran", _position);
 
-        var opacityPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        _opacity.ValueChanged += (_, _) => _opacityValue.Text = $"{_opacity.Value} %";
-        _opacityValue.Margin = new Padding(6, 8, 0, 0);
-        opacityPanel.Controls.Add(_opacity);
-        opacityPanel.Controls.Add(_opacityValue);
-        Row("Opacite", opacityPanel);
+        Row("Opacite du fond", SliderRow(_opacity, _opacityValue));
+        Row("Opacite des informations", SliderRow(_textOpacity, _textOpacityValue));
+        // Les curseurs agissent en direct : le reglage de transparence se juge a l'oeil.
+        _opacity.ValueChanged += (_, _) => PreviewOpacity();
+        _textOpacity.ValueChanged += (_, _) => PreviewOpacity();
 
         Row("Marge (px)", _margin);
         Row("Taille de police", _fontSize);
@@ -227,11 +228,43 @@ public sealed class SettingsDialog : Form
         CancelButton = cancelButton;
     }
 
+    private static FlowLayoutPanel SliderRow(TrackBar slider, Label value)
+    {
+        var panel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        slider.ValueChanged += (_, _) => value.Text = $"{slider.Value} %";
+        value.Margin = new Padding(6, 8, 0, 0);
+        panel.Controls.Add(slider);
+        panel.Controls.Add(value);
+        return panel;
+    }
+
+    private bool _loading;
+
+    /// <summary>Apercu immediat des deux opacites, sans toucher aux autres reglages ni au fichier.</summary>
+    private void PreviewOpacity()
+    {
+        if (_loading) return;
+        _config.Opacity = _opacity.Value / 100.0;
+        _config.TextOpacity = _textOpacity.Value / 100.0;
+        _config.TextOpacity = _textOpacity.Value / 100.0;
+        try
+        {
+            _apply();
+        }
+        catch (Exception ex)
+        {
+            _message.Text = $"Apercu impossible : {ex.Message}";
+        }
+    }
+
     private void LoadFromConfig()
     {
+        _loading = true;
         _position.SelectedIndex = Math.Max(0, Array.FindIndex(Positions, p => p.Value == _config.Position));
-        _opacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), 5, 100);
+        _opacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), 0, 100);
         _opacityValue.Text = $"{_opacity.Value} %";
+        _textOpacity.Value = Math.Clamp((int)Math.Round(_config.TextOpacity * 100), 5, 100);
+        _textOpacityValue.Text = $"{_textOpacity.Value} %";
         _margin.Value = Math.Clamp(_config.Margin, 0, 500);
         _fontSize.Value = Math.Clamp(_config.FontSize, 6, 72);
         _columns.Value = Math.Clamp(_config.Columns, 1, 6);
@@ -239,6 +272,7 @@ public sealed class SettingsDialog : Form
         _visibleAtStart.Checked = _config.VisibleAtStart;
         _hotkey.Text = _config.Hotkey;
         _hotkeyQuit.Text = _config.HotkeyQuit;
+        _loading = false;
     }
 
     /// <summary>Selection courante d'abord (dans l'ordre de l'overlay), puis le reste par famille.</summary>
@@ -330,6 +364,7 @@ public sealed class SettingsDialog : Form
 
         _config.Position = Positions[Math.Max(0, _position.SelectedIndex)].Value;
         _config.Opacity = _opacity.Value / 100.0;
+        _config.TextOpacity = _textOpacity.Value / 100.0;
         _config.Margin = (int)_margin.Value;
         _config.FontSize = (int)_fontSize.Value;
         _config.Columns = (int)_columns.Value;

@@ -67,7 +67,10 @@ public sealed class OverlayConfig
     public bool Enabled { get; set; } = true;
     public string Position { get; set; } = "top-left";
     public int Margin { get; set; } = 24;
-    public double Opacity { get; set; } = 0.85;
+    /// <summary>Opacite du fond (cartouche sombre derriere les mesures).</summary>
+    public double Opacity { get; set; } = 0.75;
+    /// <summary>Opacite des informations (texte et son lisere), independante du fond.</summary>
+    public double TextOpacity { get; set; } = 1.0;
     public int FontSize { get; set; } = 14;
     public int Columns { get; set; } = 1;
     /// <summary>Laisse passer clics et mouvements de souris vers la fenetre situee dessous.</summary>
@@ -186,6 +189,7 @@ public sealed class AppConfig
             ov.Position = s.String("position", ov.Position);
             ov.Margin = s.Int("margin", ov.Margin);
             ov.Opacity = s.Double("opacity", ov.Opacity);
+            ov.TextOpacity = s.Double("text_opacity", ov.TextOpacity);
             ov.FontSize = s.Int("font_size", ov.FontSize);
             ov.Columns = s.Int("columns", ov.Columns);
             ov.ClickThrough = s.Bool("click_through", ov.ClickThrough);
@@ -245,8 +249,10 @@ public sealed class AppConfig
             throw new ConfigException("[server] auth_lockout_seconds doit valoir au moins 1");
         if (!ValidPositions.Contains(Overlay.Position))
             throw new ConfigException($"[overlay] position doit etre parmi {string.Join(", ", ValidPositions)}");
-        if (Overlay.Opacity is < 0.05 or > 1.0)
-            throw new ConfigException("[overlay] opacity doit etre compris entre 0.05 et 1.0");
+        if (Overlay.Opacity is < 0.0 or > 1.0)
+            throw new ConfigException("[overlay] opacity doit etre compris entre 0.0 et 1.0");
+        if (Overlay.TextOpacity is < 0.05 or > 1.0)
+            throw new ConfigException("[overlay] text_opacity doit etre compris entre 0.05 et 1.0");
         if (Overlay.Columns < 1)
             throw new ConfigException("[overlay] columns doit valoir au moins 1");
         if (Overlay.FontSize is < 6 or > 72)

@@ -14,17 +14,26 @@ namespace OverlayPerf.Fps;
 /// </summary>
 public sealed class PresentMonSource : IDisposable
 {
-    /// <summary>Processus qui presentent en permanence sans etre des jeux : sans cette liste,
-    /// un navigateur ou Discord en arriere-plan melangerait ses trames a celles du jeu.</summary>
+    /// <summary>Processus qui presentent en permanence sans etre des jeux, utilises comme filet
+    /// de securite tant qu'aucune application au premier plan n'a ete identifiee comme cible
+    /// (voir <see cref="ForegroundProcess"/>) : sans cette liste, le tout premier instant apres
+    /// le demarrage — avant la premiere verification du premier plan — melangerait les trames
+    /// de l'Explorateur, du Gestionnaire des taches ou d'un navigateur a celles du jeu.</summary>
     public static readonly string[] DefaultExcludes =
     [
         "explorer.exe", "dwm.exe", "ApplicationFrameHost.exe", "TextInputHost.exe", "SearchHost.exe",
         "StartMenuExperienceHost.exe", "ShellExperienceHost.exe", "LockApp.exe", "Widgets.exe",
+        "Taskmgr.exe", "SystemSettings.exe", "ScreenClippingHost.exe", "SnippingTool.exe",
         "msedgewebview2.exe", "msedge.exe", "chrome.exe", "firefox.exe", "brave.exe", "opera.exe",
         "Discord.exe", "steamwebhelper.exe", "Spotify.exe", "Code.exe", "WindowsTerminal.exe",
         "NVIDIA Overlay.exe", "GameBar.exe", "GameBarFTServer.exe", "Teams.exe", "ms-teams.exe",
         "OverlayPerf.exe", "LibreHardwareMonitor.exe", "PresentMon.exe",
     ];
+
+    /// <summary>Frequence de verification de l'application au premier plan : assez rapide pour
+    /// suivre un alt-tab vers un nouveau jeu, assez espace pour ne pas relancer PresentMon en
+    /// boucle si l'utilisateur bascule frequemment de fenetre.</summary>
+    private static readonly TimeSpan ForegroundPollInterval = TimeSpan.FromSeconds(2);
 
     private static readonly TimeSpan[] RestartDelays =
     [
@@ -35,23 +44,38 @@ public sealed class PresentMonSource : IDisposable
     private readonly FrameTimeTracker _tracker;
     private readonly ILogger _log;
     private readonly IReadOnlyList<string> _excludes;
-    private readonly string? _processFilter;
+    private readonly string? _fixedTarget;
+    private readonly Func<string?> _detectForeground;
     private readonly CancellationTokenSource _stop = new();
     private Thread? _thread;
+    private System.Threading.Timer? _foregroundTimer;
     private Process? _process;
+    private volatile bool _retargeting;
+
+    /// <summary>Application actuellement ciblee via <c>--process_name</c> (<c>null</c> = aucune
+    /// identifiee pour l'instant, repli sur la liste noire <see cref="_excludes"/>).</summary>
+    private string? _target;
 
     public PresentMonSource(FrameTimeTracker tracker, ILogger log, string executable,
-        IReadOnlyList<string>? excludes = null, string? processFilter = null)
+        IReadOnlyList<string>? excludes = null, string? processFilter = null, Func<string?>? detectForeground = null)
     {
         _tracker = tracker;
         _log = log;
         Executable = executable;
         _excludes = excludes ?? DefaultExcludes;
-        _processFilter = string.IsNullOrWhiteSpace(processFilter) ? null : processFilter.Trim();
+        // Un appelant qui impose un processus precis (tests, futur usage) desactive la
+        // detection automatique : cette cible ne change plus jamais.
+        _fixedTarget = string.IsNullOrWhiteSpace(processFilter) ? null : processFilter.Trim();
+        _target = _fixedTarget;
+        _detectForeground = detectForeground ?? ForegroundProcess.Name;
     }
 
     public string Executable { get; }
     public string Name => "presentmon";
+
+    /// <summary>Application actuellement ciblee (voir <see cref="_target"/>), pour diagnostic
+    /// (fenetre Etat…, journaux) ; <c>null</c> tant qu'aucune n'a ete identifiee.</summary>
+    public string? CurrentTarget => _target;
 
     /// <summary>Nombre de trames lues depuis le demarrage, pour la surveillance.</summary>
     public long FramesRead => Interlocked.Read(ref _framesRead);
@@ -66,8 +90,45 @@ public sealed class PresentMonSource : IDisposable
     public void Start()
     {
         if (_thread is not null) return;
+        if (_fixedTarget is null)
+        {
+            // Premiere lecture synchrone : autant lancer PresentMon deja cible sur le bon
+            // processus des le premier essai plutot que d'attendre le premier tic du minuteur.
+            _target = ForegroundCandidate();
+            _foregroundTimer = new System.Threading.Timer(_ => PollForeground(), null, ForegroundPollInterval, ForegroundPollInterval);
+        }
         _thread = new Thread(Run) { Name = "fps-presentmon", IsBackground = true };
         _thread.Start();
+    }
+
+    /// <summary>Application au premier plan si elle est un candidat plausible (ni <c>null</c>,
+    /// ni dans la liste noire) ; sinon <c>null</c>, ce qui laisse la cible actuelle inchangee.</summary>
+    private string? ForegroundCandidate() => LegitimateCandidate(_detectForeground(), _excludes);
+
+    /// <summary>Un nom de processus au premier plan est un candidat plausible pour PresentMon
+    /// s'il est connu (l'appel Win32 peut echouer) et absent de la liste noire. Fonction pure,
+    /// testable sans lancer ni fenetre ni processus.</summary>
+    public static string? LegitimateCandidate(string? foreground, IReadOnlyList<string> excludes) =>
+        foreground is not null && !excludes.Contains(foreground, StringComparer.OrdinalIgnoreCase) ? foreground : null;
+
+    /// <summary>Appele par le minuteur : bascule la cible de PresentMon si une nouvelle
+    /// application legitime a pris le premier plan, en forcant un redemarrage immediat
+    /// (sans le delai croissant reserve aux echecs) pour que le changement soit quasi instantane.</summary>
+    private void PollForeground()
+    {
+        var candidate = ForegroundCandidate();
+        if (candidate is null || string.Equals(candidate, _target, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        _log.LogInformation("Nouvelle cible PresentMon : {Target} (application passee au premier plan)", candidate);
+        _target = candidate;
+        _retargeting = true;
+        var process = _process;
+        if (process is { HasExited: false })
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* deja termine entre-temps */ }
+        }
     }
 
     private void Run()
@@ -79,6 +140,14 @@ public sealed class PresentMonSource : IDisposable
             if (_stop.IsCancellationRequested)
             {
                 break;
+            }
+            if (_retargeting)
+            {
+                // Redemarrage volontaire pour changer de cible : ni un echec, ni une raison
+                // d'attendre. On y va tout de suite, avec le compteur d'essais remis a zero.
+                _retargeting = false;
+                attempt = 0;
+                continue;
             }
             // Sortie spontanee : PresentMon ne s'arrete jamais de lui-meme en fonctionnement normal.
             var errorLine = stderr.LastOrDefault(l => l.Contains("error", StringComparison.OrdinalIgnoreCase));
@@ -135,13 +204,16 @@ public sealed class PresentMonSource : IDisposable
         psi.ArgumentList.Add("--session_name");
         psi.ArgumentList.Add("OverlayPerf");
         psi.ArgumentList.Add("--stop_existing_session");
-        if (_processFilter is not null)
+        var target = _target;
+        if (target is not null)
         {
             psi.ArgumentList.Add("--process_name");
-            psi.ArgumentList.Add(_processFilter);
+            psi.ArgumentList.Add(target);
         }
         else
         {
+            // Aucune application legitime identifiee au premier plan pour l'instant (ecran
+            // d'accueil, chargement...) : filet de securite le temps que le minuteur en trouve une.
             foreach (var name in _excludes)
             {
                 psi.ArgumentList.Add("--exclude");
@@ -154,8 +226,8 @@ public sealed class PresentMonSource : IDisposable
         Process process;
         try
         {
-            _log.LogInformation("Lancement de PresentMon : {Exe} {Args}", Executable,
-                string.Join(' ', psi.ArgumentList.Take(4)) + (psi.ArgumentList.Count > 4 ? " …" : ""));
+            _log.LogInformation("Lancement de PresentMon : {Exe} ({Mode})", Executable,
+                target is not null ? $"cible unique : {target}" : $"liste noire, {_excludes.Count} exclusions");
             process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start a renvoye null");
         }
         catch (Exception ex)
@@ -253,6 +325,8 @@ public sealed class PresentMonSource : IDisposable
     public void Stop()
     {
         _stop.Cancel();
+        _foregroundTimer?.Dispose();
+        _foregroundTimer = null;
         var process = _process;
         if (process is { HasExited: false })
         {

@@ -175,6 +175,17 @@ OverlayPerf ne s'injecte dans aucun jeu. [PresentMon](https://github.com/GameTec
 donc tous les jeux, y compris en plein ecran exclusif. **Demande les droits
 administrateur** (deja acquis au demarrage grace au manifeste de l'exe).
 
+**FPS suit l'application au premier plan**, comme les autres compteurs d'images
+(RTSS, Special K...) : OverlayPerf verifie toutes les deux secondes quelle fenetre
+a le focus et cible PresentMon exclusivement sur ce processus. Alt-tabbez vers un
+jeu et sa mesure demarre en quelques secondes, sans redemarrer OverlayPerf ; passez
+au bureau ou a une autre application et la mesure precedente reste affichee jusqu'a
+ce qu'un nouveau jeu prenne le focus (afficher le FPS de l'Explorateur ou d'un
+navigateur n'aurait pas de sens). Tant qu'aucune application n'a encore ete
+identifiee (juste apres le demarrage), un filet de securite a base de liste noire
+evite de mesurer les processus systeme connus (Explorateur, Gestionnaire des
+taches...) le temps que le vrai jeu prenne le focus.
+
 **Attention au nom : deux outils differents s'appellent tous les deux
 `PresentMon.exe`.** Le depot [GameTechDev/PresentMon](https://github.com/GameTechDev/PresentMon)
 publie a la fois l'**outil console** attendu ici (le binaire de release porte un

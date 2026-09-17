@@ -117,7 +117,7 @@ Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0) sous
 
 ```bash
 cd dotnet
-dotnet test                                                   # 73 tests
+dotnet test                                                   # 76 tests
 dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish
 ```
 
@@ -141,7 +141,7 @@ OverlayPerf/
   Logging/LogSetup.cs   Serilog : fichier journalier + console si terminal
   Models/               Reading, Snapshot (même format JSON que l’ancien agent Python)
   Sensors/              LibreHardwareMonitor intégré, compteurs Windows, nvidia-smi, simulation
-  Fps/                  FrameTimeTracker, parseur CSV PresentMon, sous-processus PresentMon
+  Fps/                  FrameTimeTracker, parseur CSV PresentMon, sous-processus PresentMon, ciblage par application au premier plan
   Hub/MetricsHub.cs     boucle de collecte, historique, diffusion aux abonnés
   Server/               Kestrel : API, WebSocket, jeton, verrouillage, appairage/QR, PWA embarquée
   Ui/                   overlay WinForms, icône de notification, raccourcis globaux, Paramètres, appairage

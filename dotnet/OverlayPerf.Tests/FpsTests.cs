@@ -180,6 +180,37 @@ public class PresentMonCsvTests
     {
         Assert.Contains("explorer.exe", PresentMonSource.DefaultExcludes);
         Assert.Contains("OverlayPerf.exe", PresentMonSource.DefaultExcludes);
+        // Le Gestionnaire des taches (Windows 11, rendu accelere) et l'Explorateur presentent
+        // en continu sans etre des jeux : rencontre en pratique comme cause de FPS errones a
+        // l'ecran de bureau (144 FPS affiches alors qu'aucun jeu n'est lance).
+        Assert.Contains("Taskmgr.exe", PresentMonSource.DefaultExcludes);
         Assert.All(PresentMonSource.DefaultExcludes, n => Assert.EndsWith(".exe", n, StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+public class PresentMonTargetingTests
+{
+    // PresentMonSource.LegitimateCandidate est la decision au coeur du ciblage dynamique par
+    // application au premier plan : elle remplace une liste noire forcement incomplete (une
+    // application non prevue, comme le Gestionnaire des taches, peut toujours s'y glisser).
+    private static readonly IReadOnlyList<string> Excludes = ["explorer.exe", "Taskmgr.exe"];
+
+    [Fact]
+    public void AucuneFenetreAuPremierPlanNeChangeRienALaCible()
+    {
+        Assert.Null(PresentMonSource.LegitimateCandidate(null, Excludes));
+    }
+
+    [Fact]
+    public void UneApplicationDeLaListeNoireNestJamaisUneCibleLegitime()
+    {
+        Assert.Null(PresentMonSource.LegitimateCandidate("Taskmgr.exe", Excludes));
+        Assert.Null(PresentMonSource.LegitimateCandidate("EXPLORER.EXE", Excludes)); // casse ignoree
+    }
+
+    [Fact]
+    public void UneApplicationInconnueDevientLaCible()
+    {
+        Assert.Equal("cyberpunk2077.exe", PresentMonSource.LegitimateCandidate("cyberpunk2077.exe", Excludes));
     }
 }

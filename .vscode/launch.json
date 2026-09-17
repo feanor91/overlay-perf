@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OverlayPerf (sans elevation, pour deboguer)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build (Debug)",
+      "program": "dotnet",
+      "args": [
+        "exec",
+        "${workspaceFolder}/dotnet/OverlayPerf/bin/Debug/net8.0-windows/win-x64/OverlayPerf.dll",
+        "--no-elevate"
+      ],
+      "cwd": "${workspaceFolder}/dotnet/OverlayPerf/bin/Debug/net8.0-windows/win-x64",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

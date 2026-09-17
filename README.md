@@ -26,6 +26,16 @@ Les deux sorties lisent le meme flux de mesures : ce que montre l'overlay et ce 
 montre le telephone sont toujours coherents.
 
 
+## Version Windows en un seul executable (C#/.NET)
+
+Le dossier [`dotnet/`](dotnet/README.md) contient une reecriture complete de l'agent en
+C#/.NET 8 : un unique `OverlayPerf.exe`, sans Python a installer, qui **demande les droits
+administrateur au lancement** (invite UAC), integre LibreHardwareMonitor (plus rien a lancer
+a part pour les temperatures et ventilateurs), tient un **journal quotidien** dans
+`%LOCALAPPDATA%\overlay\logs` et garde l'icone de zone de notification, le serveur mobile,
+la configuration et le jeton de l'agent Python. Voir [dotnet/README.md](dotnet/README.md).
+L'agent Python reste la version multiplateforme (Linux : MangoHud, hwmon, RAPL).
+
 ## Application Android native
 
 Le dossier [`mobile/`](mobile/README.md) contient une application Android native

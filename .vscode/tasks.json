@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build (Debug)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/dotnet/OverlayPerf.sln",
+        "-c",
+        "Debug"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "test",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "${workspaceFolder}/dotnet/OverlayPerf.sln"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "test", "isDefault": true }
+    },
+    {
+      "label": "publish (Release, exe unique)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "publish",
+        "${workspaceFolder}/dotnet/OverlayPerf/OverlayPerf.csproj",
+        "-c",
+        "Release",
+        "-o",
+        "${workspaceFolder}/dotnet/publish"
+      ],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

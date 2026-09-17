@@ -69,8 +69,12 @@ _EXECUTABLE_INTROUVABLE_A_L_EXECUTION = (
 )
 
 #: Colonnes de duree de trame, par ordre de preference (PresentMon v2 puis v1).
-_FRAME_TIME_COLUMNS = ("FrameTime", "msBetweenPresents", "msBetweenDisplayChange")
-_APP_COLUMNS = ("Application", "ProcessName")
+#: Comparaison insensible a la casse : PresentMon a renomme ses colonnes plusieurs
+#: fois sans jamais changer que la casse (msBetweenPresents en 1.x et 2.0-2.2,
+#: MsBetweenPresents par defaut depuis 2.3), et --v2_metrics n'est pas utilise ici
+#: (il n'existe pas en 1.x, qui rejette toute option inconnue et quitte aussitot).
+_FRAME_TIME_COLUMNS = ("frametime", "msbetweenpresents", "msbetweendisplaychange")
+_APP_COLUMNS = ("application", "processname")
 
 
 class FrameSource:
@@ -121,6 +125,7 @@ def consume_presentmon_csv(stream: io.TextIOBase, tracker: FrameTimeTracker,
     """
     reader = csv.reader(stream)
     header: list[str] | None = None
+    header_lower: list[str] = []
     frame_column = app_column = -1
     count = 0
 
@@ -129,12 +134,16 @@ def consume_presentmon_csv(stream: io.TextIOBase, tracker: FrameTimeTracker,
             break
         if not row:
             continue
-        if header is None or row[0] in _APP_COLUMNS:
+        if header is None or row[0].strip().lower() in _APP_COLUMNS:
             header = [cell.strip() for cell in row]
+            header_lower = [cell.lower() for cell in header]
             frame_column = next(
-                (header.index(name) for name in _FRAME_TIME_COLUMNS if name in header), -1
+                (header_lower.index(name) for name in _FRAME_TIME_COLUMNS if name in header_lower),
+                -1,
             )
-            app_column = next((header.index(name) for name in _APP_COLUMNS if name in header), -1)
+            app_column = next(
+                (header_lower.index(name) for name in _APP_COLUMNS if name in header_lower), -1
+            )
             if frame_column < 0:
                 log.warning("En-tete PresentMon sans colonne de temps de trame : %s", header)
             continue
@@ -192,8 +201,13 @@ class PresentMonSource(FrameSource):
             self.executable,
             "--output_stdout",
             "--stop_existing_session",
-            "--no_top",
         ]
+        # Pas de --no_top : cette option a disparu en PresentMon 2.x (remplacee par
+        # --no_console_stats) et fait quitter le processus aussitot avec
+        # « error: unrecognized option » — silencieusement, puisque stderr est jete
+        # ci-dessous. Elle est de toute facon inutile ici : --output_stdout redirige
+        # deja stdout vers un tube, et PresentMon (1.x comme 2.x) detecte tout seul
+        # que ce n'est pas une console pour desactiver son affichage plein ecran.
         try:
             self._process = subprocess.Popen(  # noqa: S603 - binaire resolu via shutil.which
                 command,

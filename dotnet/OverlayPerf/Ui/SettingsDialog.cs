@@ -39,7 +39,11 @@ public sealed class SettingsDialog : Form
     private readonly CheckBox _visibleAtStart = new() { Text = "Afficher l'overlay au demarrage", AutoSize = true };
     private readonly TextBox _hotkey = new() { Width = 160 };
     private readonly TextBox _hotkeyQuit = new() { Width = 160 };
-    private readonly CheckedListBox _metrics = new() { CheckOnClick = true, IntegralHeight = false, Dock = DockStyle.Fill };
+    private readonly CheckedListBox _metrics = new()
+    {
+        CheckOnClick = true, IntegralHeight = false, Dock = DockStyle.Fill,
+        HorizontalScrollbar = true, // certains noms de sonde (cle comprise) depassent largement la largeur visible
+    };
     private readonly TextBox _filter = new() { PlaceholderText = "Filtrer…", Dock = DockStyle.Fill };
     private readonly Label _message = new() { AutoSize = true, ForeColor = Color.Firebrick, MaximumSize = new Size(700, 0) };
 
@@ -80,8 +84,8 @@ public sealed class SettingsDialog : Form
         MinimizeBox = false;
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 9.5f);
-        ClientSize = new Size(880, 600);
-        MinimumSize = new Size(760, 520);
+        ClientSize = new Size(920, 600);
+        MinimumSize = new Size(800, 520);
         ShowInTaskbar = true;
 
         BuildLayout();
@@ -93,33 +97,40 @@ public sealed class SettingsDialog : Form
 
     private void BuildLayout()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Padding = new Padding(12) };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        Controls.Add(root);
+        var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(12, 12, 12, 6) };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var root = content; // le reste de la methode construit les deux colonnes sans changement
 
         // -- Colonne gauche : affichage
+        // Libelle au-dessus du controle (une seule colonne) plutot qu'a cote : a cote, la
+        // largeur fixe du panneau ne laissait plus assez de place aux controles larges
+        // (sliders, cases a cocher au texte long), qui se retrouvaient tronques ou coupes.
         var display = new GroupBox { Text = "Affichage", Dock = DockStyle.Fill, Padding = new Padding(10) };
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, AutoSize = true };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        void Row(string label, Control control)
+        void Row(string label, Control control, bool stretch = false)
         {
-            var row = grid.RowCount++;
+            if (label.Length > 0)
+            {
+                var labelRow = grid.RowCount++;
+                grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                grid.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(0, 10, 0, 2) }, 0, labelRow);
+            }
+            var controlRow = grid.RowCount++;
             grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 8, 8, 2) }, 0, row);
-            control.Margin = new Padding(0, 4, 0, 2);
-            grid.Controls.Add(control, 1, row);
+            control.Margin = new Padding(0, 0, 0, 2);
+            if (stretch) control.Dock = DockStyle.Fill; // occupe toute la largeur disponible (sliders, champs de texte)
+            grid.Controls.Add(control, 0, controlRow);
         }
 
         foreach (var (_, label) in Positions) _position.Items.Add(label);
         Row("Coin de l'ecran", _position);
 
-        Row("Opacite du fond", SliderRow(_opacity, _opacityValue));
-        Row("Opacite des informations", SliderRow(_textOpacity, _textOpacityValue));
+        Row("Opacite du fond", SliderRow(_opacity, _opacityValue), stretch: true);
+        Row("Opacite des informations", SliderRow(_textOpacity, _textOpacityValue), stretch: true);
         // Les curseurs agissent en direct : le reglage de transparence se juge a l'oeil.
         _opacity.ValueChanged += (_, _) => PreviewOpacity();
         _textOpacity.ValueChanged += (_, _) => PreviewOpacity();
@@ -133,12 +144,12 @@ public sealed class SettingsDialog : Form
         flags.Controls.Add(_visibleAtStart);
         Row("", flags);
 
-        Row("Raccourci afficher/masquer", _hotkey);
-        Row("Raccourci quitter", _hotkeyQuit);
+        Row("Raccourci afficher/masquer", _hotkey, stretch: true);
+        Row("Raccourci quitter", _hotkeyQuit, stretch: true);
         var hint = new Label
         {
             Text = "Syntaxe : <ctrl>+<alt>+o, <shift>+<f10>, <cmd>+space…",
-            AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size(300, 0),
+            AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size(340, 0),
         };
         Row("", hint);
 
@@ -188,15 +199,20 @@ public sealed class SettingsDialog : Form
         metricsBox.Controls.Add(metricsLayout);
         root.Controls.Add(metricsBox, 1, 0);
 
-        // -- Bas : message + boutons
-        var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bottom.Controls.Add(_message, 0, 0);
-        var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true };
-        var applyButton = new Button { Text = "Appliquer", Width = 100 };
-        var okButton = new Button { Text = "OK", Width = 100 };
-        var cancelButton = new Button { Text = "Annuler", Width = 100 };
+        // -- Bas : message + boutons, dans une barre ancree en bas de la FENETRE (pas du
+        // tableau de contenu) : ainsi elle reste toujours visible quelle que soit la
+        // hauteur prise par les mesures ou les reglages au-dessus, au lieu de dependre
+        // d'une ligne "AutoSize" du tableau principal qui pouvait finir hors ecran.
+        var bottomBar = new Panel { Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(12, 8, 12, 12) };
+        _message.AutoSize = false;
+        _message.Dock = DockStyle.Fill;
+        _message.TextAlign = ContentAlignment.MiddleLeft;
+        bottomBar.Controls.Add(_message);
+
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Right, FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false };
+        var applyButton = new Button { Text = "Appliquer", Width = 100, Anchor = AnchorStyles.Right };
+        var okButton = new Button { Text = "OK", Width = 100, Anchor = AnchorStyles.Right };
+        var cancelButton = new Button { Text = "Annuler", Width = 100, Anchor = AnchorStyles.Right };
         applyButton.Click += (_, _) => TryApply();
         okButton.Click += (_, _) =>
         {
@@ -221,20 +237,29 @@ public sealed class SettingsDialog : Form
             Close();
         };
         buttons.Controls.AddRange([applyButton, okButton, cancelButton]);
-        bottom.Controls.Add(buttons, 1, 0);
-        root.Controls.Add(bottom, 0, 1);
-        root.SetColumnSpan(bottom, 2);
+        bottomBar.Controls.Add(buttons);
         AcceptButton = okButton;
         CancelButton = cancelButton;
+
+        // Ordre d'ajout important : le contenu (Dock=Fill) d'abord, la barre (Dock=Bottom)
+        // ensuite, pour qu'elle reserve sa bande en bas et que le contenu occupe le reste.
+        Controls.Add(root);
+        Controls.Add(bottomBar);
     }
 
-    private static FlowLayoutPanel SliderRow(TrackBar slider, Label value)
+    /// <summary>Curseur + pourcentage, le curseur occupant toute la largeur disponible
+    /// (une largeur fixe le laissait tronque des que le panneau se retrouvait etroit).</summary>
+    private static TableLayoutPanel SliderRow(TrackBar slider, Label value)
     {
-        var panel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, AutoSize = true };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        slider.Dock = DockStyle.Fill;
+        slider.Margin = new Padding(0);
         slider.ValueChanged += (_, _) => value.Text = $"{slider.Value} %";
-        value.Margin = new Padding(6, 8, 0, 0);
-        panel.Controls.Add(slider);
-        panel.Controls.Add(value);
+        value.Margin = new Padding(8, 8, 0, 0);
+        panel.Controls.Add(slider, 0, 0);
+        panel.Controls.Add(value, 1, 0);
         return panel;
     }
 
@@ -316,6 +341,7 @@ public sealed class SettingsDialog : Form
             }
             _metrics.Items.Add(item, item.Checked);
         }
+        UpdateMetricsHorizontalExtent();
         _metrics.EndUpdate();
         if (keepSelectedKey is not null)
         {
@@ -324,6 +350,23 @@ public sealed class SettingsDialog : Form
                 if (_metrics.Items[i] is MetricItem m && m.Key == keepSelectedKey) { _metrics.SelectedIndex = i; break; }
             }
         }
+    }
+
+    /// <summary>Un CheckedListBox ne calcule pas seul la largeur de defilement horizontal :
+    /// certains libelles (avec leur cle entre crochets) depassent largement la largeur visible,
+    /// notamment les sondes materielles au nom long (« AMD Ryzen 7 9800X3D Bus Speed »...).</summary>
+    private void UpdateMetricsHorizontalExtent()
+    {
+        if (_metrics.Items.Count == 0)
+        {
+            _metrics.HorizontalExtent = 0;
+            return;
+        }
+        using var g = _metrics.CreateGraphics();
+        // Marge pour la case a cocher et son padding interne, mesures dans le rendu reel.
+        const int checkboxAllowance = 36;
+        var widest = _metrics.Items.Cast<object>().Max(item => g.MeasureString(item.ToString(), _metrics.Font).Width);
+        _metrics.HorizontalExtent = (int)Math.Ceiling(widest) + checkboxAllowance;
     }
 
     private void MoveSelected(int delta)

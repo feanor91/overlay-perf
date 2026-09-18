@@ -130,7 +130,7 @@ public sealed class Runtime : IDisposable
         {
             sb.AppendLine($"PresentMon : {source.Executable}");
             sb.AppendLine($"  {(source.Running ? "en cours" : "arrete")}, {source.FramesRead} trames recues");
-            sb.AppendLine($"  Cible : {source.CurrentTarget ?? "aucune identifiee (liste noire en filet de securite)"}");
+            sb.AppendLine($"  Cible : {source.CurrentTarget ?? "aucune (pas de jeu au premier plan)"}");
             var stats = Tracker!.Stats();
             sb.AppendLine(stats.Fps is { } fps ? $"  FPS actuel : {fps} ({stats.Application})" : "  FPS : aucune trame recente");
         }

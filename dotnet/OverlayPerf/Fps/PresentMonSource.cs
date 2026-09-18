@@ -102,7 +102,7 @@ public sealed class PresentMonSource : IDisposable
     }
 
     /// <summary>Application au premier plan si elle est un candidat plausible (ni <c>null</c>,
-    /// ni dans la liste noire) ; sinon <c>null</c>, ce qui laisse la cible actuelle inchangee.</summary>
+    /// ni dans la liste noire) ; sinon <c>null</c>.</summary>
     private string? ForegroundCandidate() => LegitimateCandidate(_detectForeground(), _excludes);
 
     /// <summary>Un nom de processus au premier plan est un candidat plausible pour PresentMon
@@ -111,17 +111,19 @@ public sealed class PresentMonSource : IDisposable
     public static string? LegitimateCandidate(string? foreground, IReadOnlyList<string> excludes) =>
         foreground is not null && !excludes.Contains(foreground, StringComparer.OrdinalIgnoreCase) ? foreground : null;
 
-    /// <summary>Appele par le minuteur : bascule la cible de PresentMon si une nouvelle
-    /// application legitime a pris le premier plan, en forcant un redemarrage immediat
-    /// (sans le delai croissant reserve aux echecs) pour que le changement soit quasi instantane.</summary>
+    /// <summary>Appele par le minuteur : aligne la cible de PresentMon sur l'application
+    /// reellement au premier plan, y compris pour revenir a <c>null</c> (aucune mesure) des que
+    /// ce premier plan cesse d'etre un jeu plausible. Ne jamais garder une cible perimee : c'est
+    /// exactement ce qui laissait un ancien processus mesure indefiniment (bureau, Explorateur...)
+    /// et affichait un FPS sans rapport avec ce que l'utilisateur regarde.</summary>
     private void PollForeground()
     {
         var candidate = ForegroundCandidate();
-        if (candidate is null || string.Equals(candidate, _target, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(candidate, _target, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
-        _log.LogInformation("Nouvelle cible PresentMon : {Target} (application passee au premier plan)", candidate);
+        _log.LogInformation("Nouvelle cible PresentMon : {Target}", candidate ?? "aucune (plus de jeu au premier plan)");
         _target = candidate;
         var process = _process;
         if (process is { HasExited: false })

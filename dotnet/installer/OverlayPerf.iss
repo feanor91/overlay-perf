@@ -3,7 +3,7 @@
 ; Prerequis : "..\publish\OverlayPerf.exe" doit deja exister (dotnet publish -c Release -o publish).
 
 #define MyAppName "OverlayPerf"
-#define MyAppVersion "0.1.3"
+#define MyAppVersion "0.1.4"
 #define MyAppPublisher "feanor91"
 #define MyAppURL "https://github.com/feanor91/overlay-perf"
 #define MyAppExeName "OverlayPerf.exe"
@@ -50,7 +50,12 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+; runascurrentuser : avec "postinstall", Inno Setup deselave par defaut le programme lance
+; (retour aux droits de l'utilisateur d'origine, cf. doc officielle) - exactement l'inverse de
+; ce qu'il faut pour OverlayPerf.exe qui exige l'administrateur (app.manifest). Sans ce
+; drapeau, le lancement en fin d'installation echoue silencieusement (aucune invite UAC,
+; aucune erreur, l'appli ne demarre pas).
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runascurrentuser
 ; Nettoyage best-effort d'une tache planifiee "OverlayPerf" laissee par une 0.1.1
 ; installee avec l'option de demarrage automatique (retiree depuis : ne fonctionnait
 ; pas de facon fiable et n'avait pas a etre activee sans le demander explicitement).

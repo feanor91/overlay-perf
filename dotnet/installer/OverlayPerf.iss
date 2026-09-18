@@ -3,7 +3,7 @@
 ; Prerequis : "..\publish\OverlayPerf.exe" doit deja exister (dotnet publish -c Release -o publish).
 
 #define MyAppName "OverlayPerf"
-#define MyAppVersion "0.1.1"
+#define MyAppVersion "0.1.2"
 #define MyAppPublisher "feanor91"
 #define MyAppURL "https://github.com/feanor91/overlay-perf"
 #define MyAppExeName "OverlayPerf.exe"
@@ -40,7 +40,6 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startupicon"; Description: "Lancer OverlayPerf au demarrage de Windows"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
 Source: "..\publish\OverlayPerf.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -52,16 +51,17 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
-; OverlayPerf.exe exige les droits administrateur (app.manifest) : un raccourci dans le
-; dossier Demarrage ne peut pas s'auto-elever, Windows bloque son lancement sans la
-; moindre invite ni erreur (l'app reste "Active" dans le Gestionnaire des taches mais ne
-; demarre jamais). Une tache planifiee "executer avec les privileges les plus eleves",
-; declenchee a l'ouverture de session, est le mecanisme standard de contournement :
-; l'elevation est deja actee par la tache elle-meme, aucune invite UAC n'apparait.
-Filename: "{sys}\schtasks.exe"; Parameters: "/create /tn ""OverlayPerf"" /tr ""{app}\{#MyAppExeName}"" /sc onlogon /rl highest /f"; Tasks: startupicon; Flags: runhidden
+; Nettoyage best-effort d'une tache planifiee "OverlayPerf" laissee par une 0.1.1
+; installee avec l'option de demarrage automatique (retiree depuis : ne fonctionnait
+; pas de facon fiable et n'avait pas a etre activee sans le demander explicitement).
+; Silencieux si la tache n'existe pas.
+Filename: "{sys}\schtasks.exe"; Parameters: "/delete /tn ""OverlayPerf"" /f"; Flags: runhidden
 
-[UninstallRun]
-Filename: "{sys}\schtasks.exe"; Parameters: "/delete /tn ""OverlayPerf"" /f"; Flags: runhidden; RunOnceId: "DeleteStartupTask"
+[InstallDelete]
+; Raccourci mort laisse par l'installeur 0.1.0 (case "demarrer avec Windows") : un
+; raccourci dans ce dossier ne peut pas elever OverlayPerf.exe, Windows bloquait son
+; lancement sans la moindre invite ni erreur.
+Type: files; Name: "{userstartup}\{#MyAppName}.lnk"
 
 [UninstallDelete]
 ; Config, jeton et journaux sont dans %LOCALAPPDATA%\overlay : laisses en place a la

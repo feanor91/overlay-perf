@@ -130,7 +130,11 @@ manifeste : `dotnet bin/Release/net8.0-windows/win-x64/OverlayPerf.dll --no-elev
 
 `installer/OverlayPerf.iss` ([Inno Setup](https://jrsoftware.org/isinfo.php)) enveloppe
 `publish/OverlayPerf.exe` dans un installeur classique (raccourcis menu Démarrer et bureau,
-lancement au démarrage de Windows en option, désinstalleur) :
+désinstalleur). Pas de lancement automatique au démarrage de Windows : `OverlayPerf.exe`
+exige les droits administrateur (`app.manifest`), et ni un raccourci dans le dossier
+Démarrage ni la clé de registre `Run` ne peuvent l'éléver — Windows bloque silencieusement
+ce genre de lancement, sans invite ni erreur. Seule une tâche planifiée y arrive, ce qui a
+été volontairement écarté (voir l'historique du dépôt) ; l'exécutable se lance donc à la main.
 
 ```bash
 dotnet publish OverlayPerf/OverlayPerf.csproj -c Release -o publish   # d'abord l'exe

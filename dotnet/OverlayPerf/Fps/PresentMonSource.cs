@@ -123,19 +123,34 @@ public sealed class PresentMonSource : IDisposable
         }
         _log.LogInformation("Nouvelle cible PresentMon : {Target} (application passee au premier plan)", candidate);
         _target = candidate;
-        _retargeting = true;
         var process = _process;
         if (process is { HasExited: false })
         {
+            // _retargeting ne doit etre pose que si on tue reellement un PresentMon en cours :
+            // sinon (aucune cible precedente, PresentMon pas encore lance), le drapeau resterait
+            // pose a tort et masquerait un vrai echec au tout premier lancement de la cible.
+            _retargeting = true;
             try { process.Kill(entireProcessTree: true); } catch { /* deja termine entre-temps */ }
         }
     }
+
+    /// <summary>Attente entre deux verifications quand aucune cible n'est identifiee, pour
+    /// reagir vite des qu'une application legitime prend le premier plan.</summary>
+    private static readonly TimeSpan NoTargetPollInterval = TimeSpan.FromMilliseconds(500);
 
     private void Run()
     {
         var attempt = 0;
         while (!_stop.IsCancellationRequested)
         {
+            if (_target is null)
+            {
+                // Bureau, ecran de verrouillage, application exclue au premier plan... : pas de
+                // jeu identifie, donc pas de mesure plutot qu'un balayage aveugle de tout le
+                // systeme (c'est exactement ce balayage qui affichait un FPS errone au bureau).
+                _stop.Token.WaitHandle.WaitOne(NoTargetPollInterval);
+                continue;
+            }
             var (exitCode, stderr, framesThisRun) = RunOnce();
             if (_stop.IsCancellationRequested)
             {
@@ -204,30 +219,18 @@ public sealed class PresentMonSource : IDisposable
         psi.ArgumentList.Add("--session_name");
         psi.ArgumentList.Add("OverlayPerf");
         psi.ArgumentList.Add("--stop_existing_session");
-        var target = _target;
-        if (target is not null)
-        {
-            psi.ArgumentList.Add("--process_name");
-            psi.ArgumentList.Add(target);
-        }
-        else
-        {
-            // Aucune application legitime identifiee au premier plan pour l'instant (ecran
-            // d'accueil, chargement...) : filet de securite le temps que le minuteur en trouve une.
-            foreach (var name in _excludes)
-            {
-                psi.ArgumentList.Add("--exclude");
-                psi.ArgumentList.Add(name);
-            }
-        }
+        // Run() ne lance jamais PresentMon sans cible legitime identifiee : plus de repli sur
+        // un balayage "--exclude" de tout le systeme (voir Run()).
+        var target = _target ?? throw new InvalidOperationException("RunOnce appele sans cible");
+        psi.ArgumentList.Add("--process_name");
+        psi.ArgumentList.Add(target);
 
         var stderr = new List<string>();
         long frames = 0;
         Process process;
         try
         {
-            _log.LogInformation("Lancement de PresentMon : {Exe} ({Mode})", Executable,
-                target is not null ? $"cible unique : {target}" : $"liste noire, {_excludes.Count} exclusions");
+            _log.LogInformation("Lancement de PresentMon : {Exe} (cible unique : {Target})", Executable, target);
             process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start a renvoye null");
         }
         catch (Exception ex)

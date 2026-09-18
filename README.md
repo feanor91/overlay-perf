@@ -181,10 +181,12 @@ a le focus et cible PresentMon exclusivement sur ce processus. Alt-tabbez vers u
 jeu et sa mesure demarre en quelques secondes, sans redemarrer OverlayPerf ; passez
 au bureau ou a une autre application et la mesure precedente reste affichee jusqu'a
 ce qu'un nouveau jeu prenne le focus (afficher le FPS de l'Explorateur ou d'un
-navigateur n'aurait pas de sens). Tant qu'aucune application n'a encore ete
-identifiee (juste apres le demarrage), un filet de securite a base de liste noire
-evite de mesurer les processus systeme connus (Explorateur, Gestionnaire des
-taches...) le temps que le vrai jeu prenne le focus.
+navigateur n'aurait pas de sens). Tant qu'aucun jeu n'a encore ete identifie (au
+demarrage, sur le bureau, dans une application connue comme l'Explorateur ou un
+navigateur), PresentMon n'est **pas lance du tout** plutot que de mesurer tout le
+systeme sans discrimination : le FPS reste a « — » jusqu'a ce qu'un vrai jeu prenne
+le focus (une premiere version balayait tout le systeme dans ce cas et affichait
+parfois un FPS errone au bureau, sans jeu ni charge GPU).
 
 **Attention au nom : deux outils differents s'appellent tous les deux
 `PresentMon.exe`.** Le depot [GameTechDev/PresentMon](https://github.com/GameTechDev/PresentMon)

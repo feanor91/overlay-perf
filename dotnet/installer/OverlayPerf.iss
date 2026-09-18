@@ -3,7 +3,7 @@
 ; Prerequis : "..\publish\OverlayPerf.exe" doit deja exister (dotnet publish -c Release -o publish).
 
 #define MyAppName "OverlayPerf"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "feanor91"
 #define MyAppURL "https://github.com/feanor91/overlay-perf"
 #define MyAppExeName "OverlayPerf.exe"
@@ -49,10 +49,19 @@ Source: "..\publish\OverlayPerf.exe"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startupicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+; OverlayPerf.exe exige les droits administrateur (app.manifest) : un raccourci dans le
+; dossier Demarrage ne peut pas s'auto-elever, Windows bloque son lancement sans la
+; moindre invite ni erreur (l'app reste "Active" dans le Gestionnaire des taches mais ne
+; demarre jamais). Une tache planifiee "executer avec les privileges les plus eleves",
+; declenchee a l'ouverture de session, est le mecanisme standard de contournement :
+; l'elevation est deja actee par la tache elle-meme, aucune invite UAC n'apparait.
+Filename: "{sys}\schtasks.exe"; Parameters: "/create /tn ""OverlayPerf"" /tr ""{app}\{#MyAppExeName}"" /sc onlogon /rl highest /f"; Tasks: startupicon; Flags: runhidden
+
+[UninstallRun]
+Filename: "{sys}\schtasks.exe"; Parameters: "/delete /tn ""OverlayPerf"" /f"; Flags: runhidden; RunOnceId: "DeleteStartupTask"
 
 [UninstallDelete]
 ; Config, jeton et journaux sont dans %LOCALAPPDATA%\overlay : laisses en place a la

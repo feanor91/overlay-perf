@@ -127,7 +127,11 @@ public sealed class SettingsDialog : Form
         // largeur fixe du panneau ne laissait plus assez de place aux controles larges
         // (sliders, cases a cocher au texte long), qui se retrouvaient tronques ou coupes.
         var display = new GroupBox { Text = "Affichage", Dock = DockStyle.Fill, Padding = new Padding(10) };
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, AutoSize = true };
+        // Defilement vertical : le nombre de reglages a fini par depasser la hauteur
+        // disponible sur les petites fenetres, laissant les derniers (PresentMon,
+        // generation d'images) hors champ sans le moindre moyen d'y acceder.
+        var displayScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var grid = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         void Row(string label, Control control, bool stretch = false)
@@ -184,7 +188,14 @@ public sealed class SettingsDialog : Form
         };
         Row("", presentMonHint);
 
-        display.Controls.Add(grid);
+        displayScroll.Controls.Add(grid);
+        // Panel.AutoScroll ne detecte pas fiablement le depassement d'un enfant "Dock" (verifie
+        // a l'ecran : sans cette ligne, aucune barre de defilement n'apparaissait jamais, meme
+        // avec un contenu manifestement plus haut que le panneau). Fixer explicitement la taille
+        // minimale de defilement d'apres la hauteur voulue de la grille regle le probleme.
+        grid.PerformLayout();
+        displayScroll.AutoScrollMinSize = new Size(0, grid.PreferredSize.Height);
+        display.Controls.Add(displayScroll);
         root.Controls.Add(display, 0, 0);
 
         // -- Colonne droite : mesures

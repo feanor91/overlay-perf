@@ -106,12 +106,19 @@ sont indépendantes, et le texte garde son liseré net quelle que soit la transp
 Les options `[sensors] lhm_url`, `[fps] mangohud_log_dir` et le mode `mangohud` sont acceptés
 mais ignorés (journalisés).
 
-**Multiplicateur de génération d'images** (`fps.framegen`, DLSS/FSR/XeSS Frame Generation) :
-option beta de PresentMon (`--track_frame_type`), à activer dans Paramètres… ou
-`[fps] track_frame_generation = true`. Nécessite une version récente de PresentMon **et** que
-le jeu/pilote l'instrumente ; si l'exécutable configuré ne reconnaît pas l'option, elle est
-désactivée automatiquement pour la session (journalisé) plutôt que de casser tout le FPS.
-Absent de tout ça, la mesure reste à « — ».
+**Multiplicateur de génération d'images** (`fps.framegen`) : option beta de PresentMon
+(`--track_frame_type`), à activer dans Paramètres… ou `[fps] track_frame_generation = true`.
+Si l'exécutable configuré ne reconnaît pas l'option, elle est désactivée automatiquement pour
+la session (journalisé) plutôt que de casser tout le FPS ; sans elle, la mesure reste à « — ».
+
+**Limite connue (PresentMon, pas cet agent) : NVIDIA n'est pas distingué.** La colonne
+`FrameType` de PresentMon ne différencie aujourd'hui que **Intel XeSS Frame Generation** et
+**AMD Fluid Motion Frames** des trames réellement calculées ; le DLSS Frame Generation de
+NVIDIA (simple ou multi-image) n'a pas de valeur dédiée et se retrouve compté comme une trame
+normale. Sur une carte NVIDIA, `fps.framegen` affichera donc **x1,0 en permanence, même
+Frame Generation activé côté jeu** — ce n'est pas un chiffre faux au sens d'un bug de calcul,
+c'est PresentMon qui ne voit pas encore la différence. Seuls les jeux/pilotes utilisant Intel
+XeSS-FG ou AMD AFMF donnent un multiplicateur exploitable pour l'instant.
 
 Clés de mesures publiées : `fps.*` (dont `fps.application`, le processus actuellement mesuré,
 et `fps.framegen`, le multiplicateur de génération d'images — voir plus bas), `cpu.load`, `cpu.temp`, `cpu.power`, `cpu.clock`,

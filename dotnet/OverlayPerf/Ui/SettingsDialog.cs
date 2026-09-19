@@ -183,7 +183,9 @@ public sealed class SettingsDialog : Form
         Row("", _trackFrameGeneration);
         var presentMonHint = new Label
         {
-            Text = "Necessite de relancer OverlayPerf pour prendre effet.",
+            Text = "Necessite de relancer OverlayPerf pour prendre effet. Limite connue de "
+                   + "PresentMon : seuls Intel XeSS-FG et AMD AFMF sont distingues pour l'instant, "
+                   + "pas le DLSS Frame Generation NVIDIA (affichera x1,0 en permanence).",
             AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size(340, 0),
         };
         Row("", presentMonHint);

@@ -116,14 +116,31 @@ public sealed class PresentMonSource : IDisposable
     public static string? LegitimateCandidate(string? foreground, IReadOnlyList<string> excludes) =>
         foreground is not null && !excludes.Contains(foreground, StringComparer.OrdinalIgnoreCase) ? foreground : null;
 
+    /// <summary>Le premier plan doit rester "sans jeu" pendant cette duree avant que la cible ne
+    /// soit reellement effacee : un alt-tab bref (capture d'ecran, notification, un coup d'oeil a
+    /// une autre fenetre) ne doit pas couper le FPS pour autant. Bien plus court que l'ancien
+    /// comportement "jamais efface" (qui affichait un FPS perime indefiniment), mais pas instantane.</summary>
+    private static readonly TimeSpan GraceBeforeClearing = TimeSpan.FromSeconds(5);
+    private DateTime? _sinceNoLegitimateForeground;
+
     /// <summary>Appele par le minuteur : aligne la cible de PresentMon sur l'application
-    /// reellement au premier plan, y compris pour revenir a <c>null</c> (aucune mesure) des que
-    /// ce premier plan cesse d'etre un jeu plausible. Ne jamais garder une cible perimee : c'est
-    /// exactement ce qui laissait un ancien processus mesure indefiniment (bureau, Explorateur...)
-    /// et affichait un FPS sans rapport avec ce que l'utilisateur regarde.</summary>
+    /// reellement au premier plan. Basculer vers un nouveau jeu est instantane ; revenir a
+    /// <c>null</c> (aucune mesure) attend <see cref="GraceBeforeClearing"/> pour ne pas clignoter
+    /// a chaque alt-tab bref, mais sans jamais garder une cible perimee indefiniment (c'est
+    /// exactement ce qui affichait un FPS sans rapport avec ce que l'utilisateur regarde).</summary>
     private void PollForeground()
     {
         var candidate = ForegroundCandidate();
+        if (candidate is not null)
+        {
+            _sinceNoLegitimateForeground = null;
+        }
+        else
+        {
+            if (_target is null) return; // deja efface, rien a faire
+            _sinceNoLegitimateForeground ??= DateTime.UtcNow;
+            if (DateTime.UtcNow - _sinceNoLegitimateForeground.Value < GraceBeforeClearing) return;
+        }
         if (string.Equals(candidate, _target, StringComparison.OrdinalIgnoreCase))
         {
             return;

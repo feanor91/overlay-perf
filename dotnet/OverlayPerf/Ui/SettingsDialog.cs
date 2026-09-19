@@ -22,11 +22,15 @@ public sealed class SettingsDialog : Form
     private static readonly string[] GroupOrder = ["fps", "cpu", "gpu", "memory", "fan", "storage", "network", "system"];
 
     private readonly OverlayConfig _config;
+    private readonly FpsConfig _fpsConfig;
     private readonly Func<Snapshot?> _latest;
     private readonly Action _apply;
     private readonly Action _save;
     private readonly OverlaySnapshot _original;
+    private readonly FpsSnapshot _originalFps;
 
+    private readonly (string DeviceName, string Label)[] _monitors = BuildMonitorList();
+    private readonly ComboBox _monitor = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 220 };
     private readonly ComboBox _position = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly TrackBar _opacity = new() { Minimum = 0, Maximum = 100, TickFrequency = 5, Width = 220 };
     private readonly Label _opacityValue = new() { AutoSize = true };
@@ -39,6 +43,11 @@ public sealed class SettingsDialog : Form
     private readonly CheckBox _visibleAtStart = new() { Text = "Afficher l'overlay au demarrage", AutoSize = true };
     private readonly TextBox _hotkey = new() { Width = 160 };
     private readonly TextBox _hotkeyQuit = new() { Width = 160 };
+    private readonly TextBox _presentMonPath = new() { Width = 220 };
+    private readonly CheckBox _trackFrameGeneration = new()
+    {
+        Text = "Mesurer le multiplicateur de generation d'images (beta PresentMon)", AutoSize = true,
+    };
     private readonly CheckedListBox _metrics = new()
     {
         CheckOnClick = true, IntegralHeight = false, Dock = DockStyle.Fill,
@@ -57,28 +66,38 @@ public sealed class SettingsDialog : Form
     }
 
     private sealed record OverlaySnapshot(string Position, double Opacity, double TextOpacity, int Margin, int FontSize, int Columns,
-        bool ClickThrough, bool VisibleAtStart, string Hotkey, string HotkeyQuit, List<string> Metrics)
+        bool ClickThrough, bool VisibleAtStart, string Hotkey, string HotkeyQuit, List<string> Metrics, string Monitor)
     {
         public static OverlaySnapshot Of(OverlayConfig c) => new(c.Position, c.Opacity, c.TextOpacity, c.Margin, c.FontSize, c.Columns,
-            c.ClickThrough, c.VisibleAtStart, c.Hotkey, c.HotkeyQuit, [.. c.Metrics]);
+            c.ClickThrough, c.VisibleAtStart, c.Hotkey, c.HotkeyQuit, [.. c.Metrics], c.Monitor);
 
         public void RestoreInto(OverlayConfig c)
         {
             c.Position = Position; c.Opacity = Opacity; c.TextOpacity = TextOpacity; c.Margin = Margin; c.FontSize = FontSize; c.Columns = Columns;
             c.ClickThrough = ClickThrough; c.VisibleAtStart = VisibleAtStart; c.Hotkey = Hotkey; c.HotkeyQuit = HotkeyQuit;
-            c.Metrics = [.. Metrics];
+            c.Metrics = [.. Metrics]; c.Monitor = Monitor;
         }
     }
 
-    public SettingsDialog(OverlayConfig config, Func<Snapshot?> latest, Action apply, Action save)
+    /// <summary>Options PresentMon : separees d'<see cref="OverlaySnapshot"/> car sans effet a
+    /// chaud (voir <see cref="TomlPatcher"/>.SaveFps) - seul "Annuler" doit les restaurer telles
+    /// quelles dans le formulaire, elles ne passent jamais par <see cref="_apply"/>.</summary>
+    private sealed record FpsSnapshot(string PresentMonPath, bool TrackFrameGeneration)
+    {
+        public static FpsSnapshot Of(FpsConfig c) => new(c.PresentMonPath, c.TrackFrameGeneration);
+    }
+
+    public SettingsDialog(OverlayConfig config, FpsConfig fpsConfig, Func<Snapshot?> latest, Action apply, Action save)
     {
         _config = config;
+        _fpsConfig = fpsConfig;
         _latest = latest;
         _apply = apply;
         _save = save;
         _original = OverlaySnapshot.Of(config);
+        _originalFps = FpsSnapshot.Of(fpsConfig);
 
-        Text = "OverlayPerf — parametres";
+        Text = $"OverlayPerf {Server.WebServer.Version} — parametres";
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.Sizable;
         MinimizeBox = false;
@@ -126,6 +145,9 @@ public sealed class SettingsDialog : Form
             grid.Controls.Add(control, 0, controlRow);
         }
 
+        foreach (var (_, label) in _monitors) _monitor.Items.Add(label);
+        Row("Ecran d'affichage", _monitor);
+
         foreach (var (_, label) in Positions) _position.Items.Add(label);
         Row("Coin de l'ecran", _position);
 
@@ -152,6 +174,15 @@ public sealed class SettingsDialog : Form
             AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size(340, 0),
         };
         Row("", hint);
+
+        Row("Chemin de PresentMon (vide = recherche automatique)", PresentMonPathRow(), stretch: true);
+        Row("", _trackFrameGeneration);
+        var presentMonHint = new Label
+        {
+            Text = "Necessite de relancer OverlayPerf pour prendre effet.",
+            AutoSize = true, ForeColor = SystemColors.GrayText, MaximumSize = new Size(340, 0),
+        };
+        Row("", presentMonHint);
 
         display.Controls.Add(grid);
         root.Controls.Add(display, 0, 0);
@@ -232,6 +263,8 @@ public sealed class SettingsDialog : Form
         cancelButton.Click += (_, _) =>
         {
             _original.RestoreInto(_config);
+            _fpsConfig.PresentMonPath = _originalFps.PresentMonPath;
+            _fpsConfig.TrackFrameGeneration = _originalFps.TrackFrameGeneration;
             _apply();
             DialogResult = DialogResult.Cancel;
             Close();
@@ -263,6 +296,47 @@ public sealed class SettingsDialog : Form
         return panel;
     }
 
+    /// <summary>Champ + bouton "Parcourir…", le champ occupant toute la largeur disponible.</summary>
+    private TableLayoutPanel PresentMonPathRow()
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, AutoSize = true };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _presentMonPath.Dock = DockStyle.Fill;
+        _presentMonPath.Margin = new Padding(0);
+        var browse = new Button { Text = "Parcourir…", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+        browse.Click += (_, _) =>
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Choisir PresentMon",
+                Filter = "PresentMon (*.exe)|PresentMon*.exe|Executables (*.exe)|*.exe|Tous les fichiers|*.*",
+                FileName = _presentMonPath.Text,
+            };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _presentMonPath.Text = dialog.FileName;
+            }
+        };
+        panel.Controls.Add(_presentMonPath, 0, 0);
+        panel.Controls.Add(browse, 1, 0);
+        return panel;
+    }
+
+    /// <summary>Un moniteur par ecran connecte, plus une entree "automatique" en tete.</summary>
+    private static (string DeviceName, string Label)[] BuildMonitorList()
+    {
+        var items = new List<(string, string)> { ("", "Automatique (ecran principal)") };
+        var screens = Screen.AllScreens;
+        for (var i = 0; i < screens.Length; i++)
+        {
+            var s = screens[i];
+            var suffix = s.Primary ? " (principal)" : "";
+            items.Add((s.DeviceName, $"Ecran {i + 1} — {s.Bounds.Width}x{s.Bounds.Height}{suffix}"));
+        }
+        return [.. items];
+    }
+
     private bool _loading;
 
     /// <summary>Apercu immediat des deux opacites, sans toucher aux autres reglages ni au fichier.</summary>
@@ -285,6 +359,7 @@ public sealed class SettingsDialog : Form
     private void LoadFromConfig()
     {
         _loading = true;
+        _monitor.SelectedIndex = Math.Max(0, Array.FindIndex(_monitors, m => m.DeviceName == _config.Monitor));
         _position.SelectedIndex = Math.Max(0, Array.FindIndex(Positions, p => p.Value == _config.Position));
         _opacity.Value = Math.Clamp((int)Math.Round(_config.Opacity * 100), 0, 100);
         _opacityValue.Text = $"{_opacity.Value} %";
@@ -297,6 +372,8 @@ public sealed class SettingsDialog : Form
         _visibleAtStart.Checked = _config.VisibleAtStart;
         _hotkey.Text = _config.Hotkey;
         _hotkeyQuit.Text = _config.HotkeyQuit;
+        _presentMonPath.Text = _fpsConfig.PresentMonPath;
+        _trackFrameGeneration.Checked = _fpsConfig.TrackFrameGeneration;
         _loading = false;
     }
 
@@ -416,6 +493,11 @@ public sealed class SettingsDialog : Form
         _config.Hotkey = _hotkey.Text.Trim();
         _config.HotkeyQuit = _hotkeyQuit.Text.Trim();
         _config.Metrics = checkedKeys;
+        _config.Monitor = _monitors[Math.Max(0, _monitor.SelectedIndex)].DeviceName;
+        // Sans effet a chaud (voir PresentMonPathRow) : ecrites dans _fpsConfig pour
+        // l'enregistrement, mais _apply() (overlay uniquement) ne les lit jamais.
+        _fpsConfig.PresentMonPath = _presentMonPath.Text.Trim();
+        _fpsConfig.TrackFrameGeneration = _trackFrameGeneration.Checked;
         try
         {
             _apply();

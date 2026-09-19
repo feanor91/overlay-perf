@@ -45,10 +45,13 @@ avertissement dans le journal).
 2. Double-cliquez sur `OverlayPerf.exe` et acceptez l'invite UAC.
 3. Une notification confirme le démarrage ; l'icône dans la zone de notification donne accès à :
    - **Afficher / masquer l'overlay** (aussi par `Ctrl+Alt+O`, clic gauche sur l'icône) ;
-   - **Paramètres…** : coin de l'écran, **opacité du fond et opacité des informations** (deux
-     curseurs, aperçu en direct), marge, police, colonnes, click-through,
-     raccourcis, et la liste des mesures de l'overlay à cocher/décocher et ordonner
-     (« Appliquer » agit à chaud, « OK » enregistre dans `config.toml` en gardant ses commentaires) ;
+   - **Paramètres…** : écran d'affichage (si plusieurs moniteurs), coin de l'écran, **opacité
+     du fond et opacité des informations** (deux curseurs, aperçu en direct), marge, police,
+     colonnes, click-through, raccourcis, chemin de PresentMon, mesure du multiplicateur de
+     génération d'images (beta), et la liste des mesures de l'overlay à cocher/décocher et
+     ordonner (« Appliquer » agit à chaud, « OK » enregistre dans `config.toml` en gardant ses
+     commentaires ; le chemin de PresentMon et le multiplicateur de génération d'images
+     demandent de relancer OverlayPerf) ;
    - **Appairer un téléphone…** : QR code et adresse à scanner ;
    - **Ouvrir le journal du jour**, **le dossier des journaux** ;
    - **État…** : capteurs actifs, PresentMon, serveur, avertissements ;
@@ -103,7 +106,15 @@ sont indépendantes, et le texte garde son liseré net quelle que soit la transp
 Les options `[sensors] lhm_url`, `[fps] mangohud_log_dir` et le mode `mangohud` sont acceptés
 mais ignorés (journalisés).
 
-Clés de mesures publiées : `fps.*`, `cpu.load`, `cpu.temp`, `cpu.power`, `cpu.clock`,
+**Multiplicateur de génération d'images** (`fps.framegen`, DLSS/FSR/XeSS Frame Generation) :
+option beta de PresentMon (`--track_frame_type`), à activer dans Paramètres… ou
+`[fps] track_frame_generation = true`. Nécessite une version récente de PresentMon **et** que
+le jeu/pilote l'instrumente ; si l'exécutable configuré ne reconnaît pas l'option, elle est
+désactivée automatiquement pour la session (journalisé) plutôt que de casser tout le FPS.
+Absent de tout ça, la mesure reste à « — ».
+
+Clés de mesures publiées : `fps.*` (dont `fps.application`, le processus actuellement mesuré,
+et `fps.framegen`, le multiplicateur de génération d'images — voir plus bas), `cpu.load`, `cpu.temp`, `cpu.power`, `cpu.clock`,
 `gpu.N.load|temp|hotspot|fan|fan.rpm|fan.2.rpm|vram.used|vram.load|power|clock.core|clock.mem`
 (`fan` en %, `fan.rpm` et `fan.2.rpm` en tours/minute par ventilateur ; la carte dédiée est
 toujours `gpu.0`, les puces intégrées viennent après), `memory.load|used|total|commit`,

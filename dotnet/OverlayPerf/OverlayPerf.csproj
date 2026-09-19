@@ -12,7 +12,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>OverlayPerf</AssemblyName>
     <RootNamespace>OverlayPerf</RootNamespace>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
     <Authors>feanor91</Authors>
     <Description>Overlay de monitoring materiel (FPS, temperatures, CPU/GPU/RAM, ventilateurs) avec application mobile compagnon.</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

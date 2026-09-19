@@ -166,9 +166,26 @@ public static class ConfigWriter
             ["hotkey_quit"] = TomlPatcher.String(overlay.HotkeyQuit),
             ["visible_at_start"] = TomlPatcher.Bool(overlay.VisibleAtStart),
             ["metrics"] = TomlPatcher.StringArray(overlay.Metrics),
+            ["monitor"] = TomlPatcher.String(overlay.Monitor),
         };
         var updated = TomlPatcher.SetValues(text, "overlay", values);
         // Relecture avant ecriture : un fichier qu'on ne sait plus lire ne doit jamais etre ecrit.
+        AppConfig.Parse(updated, path);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, updated, new UTF8Encoding(false));
+    }
+
+    /// <summary>Options PresentMon : n'entrent en vigueur qu'au redemarrage d'OverlayPerf (la
+    /// source FPS est construite une seule fois, au demarrage).</summary>
+    public static void SaveFps(string path, FpsConfig fps)
+    {
+        var text = File.Exists(path) ? File.ReadAllText(path) : ConfigTemplate.Text;
+        var values = new Dictionary<string, string>
+        {
+            ["presentmon_path"] = TomlPatcher.String(fps.PresentMonPath),
+            ["track_frame_generation"] = TomlPatcher.Bool(fps.TrackFrameGeneration),
+        };
+        var updated = TomlPatcher.SetValues(text, "fps", values);
         AppConfig.Parse(updated, path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, updated, new UTF8Encoding(false));

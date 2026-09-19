@@ -149,6 +149,25 @@ public class ConfigWriterTests
     }
 
     [Fact]
+    public void EnregistreLesOptionsPresentMon()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"overlayperf-test-{Guid.NewGuid():N}.toml");
+        try
+        {
+            File.WriteAllText(path, ConfigTemplate.Text);
+            ConfigWriter.SaveFps(path, new FpsConfig { PresentMonPath = "D:/Outils/PresentMon.exe", TrackFrameGeneration = true });
+            var reloaded = AppConfig.Load(path);
+            Assert.Equal("D:/Outils/PresentMon.exe", reloaded.Fps.PresentMonPath);
+            Assert.True(reloaded.Fps.TrackFrameGeneration);
+            Assert.Empty(reloaded.Warnings);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void CreeLeFichierDepuisLeModeleSiAbsent()
     {
         var path = Path.Combine(Path.GetTempPath(), $"overlayperf-test-{Guid.NewGuid():N}", "config.toml");
@@ -182,7 +201,7 @@ public class SettingsDialogTests
         {
             try
             {
-                using var dialog = new SettingsDialog(config, () => snapshot, () => { }, () => { });
+                using var dialog = new SettingsDialog(config, new FpsConfig(), () => snapshot, () => { }, () => { });
                 dialog.CreateControl();
             }
             catch (Exception ex)

@@ -69,7 +69,8 @@ public sealed class Runtime : IDisposable
             return null;
         }
         _log.LogInformation("PresentMon : {Path}", path);
-        var source = new PresentMonSource(tracker, _logs.CreateLogger("overlay.fps.presentmon"), path);
+        var source = new PresentMonSource(tracker, _logs.CreateLogger("overlay.fps.presentmon"), path,
+            trackFrameGeneration: config.Fps.TrackFrameGeneration);
         source.Failed += message => Problem?.Invoke(message);
         return source;
     }

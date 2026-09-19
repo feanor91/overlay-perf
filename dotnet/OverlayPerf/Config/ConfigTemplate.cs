@@ -52,6 +52,11 @@ public static class ConfigTemplate
         # Duree de la moyenne glissante du compteur, en secondes.
         window_seconds = 1.0
 
+        # Multiplicateur de generation d'images (DLSS/FSR/XeSS Frame Generation), publie comme
+        # mesure "fps.framegen". Option beta de PresentMon (--track_frame_type) : desactivee
+        # automatiquement pour la session si l'executable configure ne la reconnait pas.
+        track_frame_generation = false
+
 
         [server]
         enabled = true
@@ -99,6 +104,11 @@ public static class ConfigTemplate
 
         tray_icon = true
         visible_at_start = true
+
+        # Ecran d'affichage si plusieurs moniteurs : nom exact tel que liste dans Parametres…
+        # (ex. "\\.\DISPLAY2"). Vide = ecran principal, ou repli automatique dessus si l'ecran
+        # configure a ete debranche.
+        monitor = ""
 
         # Mesures affichees, dans l'ordre. Un « * » final agit comme un prefixe.
         # « OverlayPerf.exe --sensors » liste les cles reellement disponibles sur votre machine.

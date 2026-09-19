@@ -213,6 +213,7 @@ public static class Program
         void SaveOverlaySettings()
         {
             ConfigWriter.SaveOverlay(configPath, config.Overlay);
+            ConfigWriter.SaveFps(configPath, config.Fps);
             log.LogInformation("Parametres enregistres dans {Path}", configPath);
             host!.Notify("Parametres enregistres", configPath, ToolTipIcon.Info);
         }
@@ -225,7 +226,7 @@ public static class Program
                 settings.Activate();
                 return;
             }
-            settings = new SettingsDialog(config.Overlay, () => runtime.Hub.Latest, ApplyOverlaySettings, SaveOverlaySettings);
+            settings = new SettingsDialog(config.Overlay, config.Fps, () => runtime.Hub.Latest, ApplyOverlaySettings, SaveOverlaySettings);
             settings.FormClosed += (_, _) => settings = null;
             settings.Show();
         }

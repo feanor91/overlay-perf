@@ -28,6 +28,10 @@ public enum Kind
     Fps,
     Duration,
     Rate,
+    /// <summary>Valeur textuelle (nom de processus...) plutot que numerique : voir <see cref="Reading.Text"/>.</summary>
+    Text,
+    /// <summary>Facteur sans dimension (multiplicateur de generation d'images...).</summary>
+    Multiplier,
 }
 
 public static class EnumNames
@@ -57,7 +61,9 @@ public static class EnumNames
         Kind.Voltage => "voltage",
         Kind.Fps => "fps",
         Kind.Duration => "duration",
-        _ => "rate",
+        Kind.Rate => "rate",
+        Kind.Text => "text",
+        _ => "multiplier",
     };
 }
 
@@ -97,6 +103,9 @@ public sealed record Reading
         init => _value = value is { } v && double.IsFinite(v) ? v : null;
     }
     private readonly double? _value;
+    /// <summary>Valeur textuelle pour <see cref="Kind.Text"/> (nom de processus...), en plus ou
+    /// a la place de <see cref="Value"/> : la mesure "a une valeur" des que l'un des deux est pose.</summary>
+    public string? Text { get; init; }
     public string Unit { get; init; } = "";
     public required Group Group { get; init; }
     public required Kind Kind { get; init; }
@@ -127,6 +136,7 @@ public sealed record Reading
             ["key"] = Key,
             ["label"] = Label,
             ["value"] = Value,
+            ["text"] = Text,
             ["unit"] = Unit,
             ["group"] = Group.Wire(),
             ["kind"] = Kind.Wire(),

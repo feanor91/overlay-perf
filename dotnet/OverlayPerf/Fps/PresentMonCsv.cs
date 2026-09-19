@@ -12,12 +12,17 @@ public sealed class PresentMonCsv
     /// <summary>Colonnes de duree de trame, par ordre de preference (minuscules).</summary>
     public static readonly string[] FrameTimeColumns = ["frametime", "msbetweenpresents", "msbetweendisplaychange"];
     public static readonly string[] ApplicationColumns = ["application", "processname"];
+    /// <summary>Colonne ajoutee par PresentMon avec <c>--track_frame_type</c> : distingue les
+    /// trames reellement calculees ("Application") des trames generees (DLSS/FSR/XeSS Frame
+    /// Generation). Absente si le pilote/jeu ne l'instrumente pas, ou si le drapeau n'est pas passe.</summary>
+    public const string FrameTypeColumn = "frametype";
 
     private readonly FrameTimeTracker _tracker;
     private readonly Action<string>? _onHeaderWithoutFrameTime;
     private string[]? _header;
     private int _frameColumn = -1;
     private int _appColumn = -1;
+    private int _frameTypeColumn = -1;
 
     public PresentMonCsv(FrameTimeTracker tracker, Action<string>? onHeaderWithoutFrameTime = null)
     {
@@ -48,6 +53,7 @@ public sealed class PresentMonCsv
             var lowered = _header.Select(c => c.ToLowerInvariant()).ToArray();
             _frameColumn = FrameTimeColumns.Select(name => Array.IndexOf(lowered, name)).FirstOrDefault(i => i >= 0, -1);
             _appColumn = ApplicationColumns.Select(name => Array.IndexOf(lowered, name)).FirstOrDefault(i => i >= 0, -1);
+            _frameTypeColumn = Array.IndexOf(lowered, FrameTypeColumn);
             if (_frameColumn < 0)
             {
                 _onHeaderWithoutFrameTime?.Invoke(string.Join(",", _header));
@@ -64,7 +70,9 @@ public sealed class PresentMonCsv
             return false;
         }
         var application = _appColumn >= 0 && _appColumn < cells.Length ? cells[_appColumn].Trim() : null;
-        _tracker.AddFrameTime(frameTime.Value, string.IsNullOrEmpty(application) ? null : application);
+        var frameType = _frameTypeColumn >= 0 && _frameTypeColumn < cells.Length ? cells[_frameTypeColumn].Trim() : null;
+        _tracker.AddFrameTime(frameTime.Value, string.IsNullOrEmpty(application) ? null : application,
+            string.IsNullOrEmpty(frameType) ? null : frameType);
         FrameCount++;
         return true;
     }

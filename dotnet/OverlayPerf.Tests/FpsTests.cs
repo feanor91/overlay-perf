@@ -109,6 +109,28 @@ public class FrameTimeTrackerTests
         Assert.Equal(100.0, FrameTimeTracker.Percentile(values, 1.0));
         Assert.Equal(99.01, FrameTimeTracker.Percentile(values, 0.99), 0.001);
     }
+
+    [Fact]
+    public void SansColonneFrameType_MultiplicateurAbsent()
+    {
+        var tracker = Tracker();
+        for (var i = 0; i < 10; i++) tracker.AddFrameTime(8.0);
+        Assert.Null(tracker.Stats().FrameGenerationMultiplier);
+    }
+
+    [Fact]
+    public void FrameGenerationMultiplierCompteLesTramesGenereesParTrameReelle()
+    {
+        var tracker = Tracker();
+        // 1 trame calculee par le jeu pour 2 trames generees affichees (DLSS/FSR Frame Generation) : x3.
+        for (var i = 0; i < 5; i++)
+        {
+            tracker.AddFrameTime(8.0, frameType: "Application");
+            tracker.AddFrameTime(8.0, frameType: "Intel XeSS-FG");
+            tracker.AddFrameTime(8.0, frameType: "Intel XeSS-FG");
+        }
+        Assert.Equal(3.0, tracker.Stats().FrameGenerationMultiplier);
+    }
 }
 
 public class PresentMonCsvTests
@@ -147,6 +169,19 @@ public class PresentMonCsvTests
         Assert.Equal(frames, stats.FrameCount);
         Assert.Equal(meanMs, stats.FrameTimeMs!.Value, 0.05);
         Assert.Equal("jeu.exe", stats.Application);
+    }
+
+    [Fact]
+    public void ColonneFrameTypeAlimenteLeMultiplicateur()
+    {
+        const string csv = """
+            Application,ProcessID,SwapChainAddress,PresentRuntime,FrameType,FrameTime
+            jeu.exe,99,0x2,DXGI,Application,8.30
+            jeu.exe,99,0x2,DXGI,Intel XeSS-FG,8.30
+            """;
+        var tracker = new FrameTimeTracker(windowSeconds: 5.0, staleAfter: 60.0);
+        new PresentMonCsv(tracker).Consume(new StringReader(csv));
+        Assert.Equal(2.0, tracker.Stats().FrameGenerationMultiplier);
     }
 
     [Fact]

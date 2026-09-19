@@ -109,14 +109,15 @@ public sealed class OverlayForm : Form
     // --- Donnees -----------------------------------------------------------------
 
     private List<Reading> Select(Snapshot snapshot) =>
-        snapshot.Filter(_config.Metrics).Readings.Where(r => r.Value is not null).ToList();
+        snapshot.Filter(_config.Metrics).Readings.Where(r => r.Value is not null || r.Text is not null).ToList();
 
     /// <summary>Remplace les mesures affichees et redimensionne la fenetre si besoin.</summary>
     public void Apply(Snapshot snapshot)
     {
         var selected = Select(snapshot);
         var changedCount = selected.Count != _readings.Count;
-        if (!changedCount && selected.Zip(_readings).All(p => p.First.Key == p.Second.Key && p.First.Value == p.Second.Value && p.First.Label == p.Second.Label))
+        if (!changedCount && selected.Zip(_readings).All(p => p.First.Key == p.Second.Key && p.First.Value == p.Second.Value
+                                                               && p.First.Text == p.Second.Text && p.First.Label == p.Second.Label))
         {
             return;
         }
@@ -202,8 +203,7 @@ public sealed class OverlayForm : Form
             Size = new Size(1, 1);
             return;
         }
-        var screen = Screen.FromControl(this) ?? Screen.PrimaryScreen;
-        var zone = screen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1080);
+        var zone = ResolveScreen().WorkingArea;
         var margin = _config.Margin;
         var x = zone.Left + margin;
         var y = zone.Top + margin;
@@ -216,6 +216,19 @@ public sealed class OverlayForm : Form
             y = zone.Bottom - _layout.Height - margin;
         }
         SetBounds(x, y, _layout.Width, _layout.Height);
+    }
+
+    /// <summary>Ecran choisi dans Parametres… (<see cref="OverlayConfig.Monitor"/>, nom de
+    /// peripherique) ; repli sur l'ecran principal si vide ou si l'ecran configure a ete
+    /// debranche depuis (mieux vaut afficher ailleurs que nulle part).</summary>
+    private Screen ResolveScreen()
+    {
+        if (_config.Monitor.Length > 0)
+        {
+            var match = Screen.AllScreens.FirstOrDefault(s => s.DeviceName == _config.Monitor);
+            if (match is not null) return match;
+        }
+        return Screen.PrimaryScreen ?? Screen.AllScreens[0];
     }
 
     // --- Rendu --------------------------------------------------------------------
@@ -332,12 +345,15 @@ public sealed class OverlayForm : Form
     /// <summary>Vert / orange / rouge selon la position dans la plage utile de la sonde.</summary>
     public static Color ValueColorFor(Reading reading)
     {
-        if (reading.Value is null) return LabelColor;
-        if (reading.Kind is not (Kind.Temperature or Kind.Load or Kind.Power)) return ValueColor;
+        if (reading.Value is null && reading.Text is null) return LabelColor;
+        if (reading.Kind is not (Kind.Temperature or Kind.Load or Kind.Power) || reading.Value is not { } value)
+        {
+            return ValueColor;
+        }
         var (low, high) = reading.Range;
         var span = high - low;
         if (span <= 0) return ValueColor;
-        var ratio = (reading.Value.Value - low) / span;
+        var ratio = (value - low) / span;
         return ratio >= 0.85 ? HotColor : ratio >= 0.65 ? WarmColor : OkColor;
     }
 
@@ -345,6 +361,7 @@ public sealed class OverlayForm : Form
 
     public static string FormatValue(Reading reading)
     {
+        if (reading.Text is { } textValue) return textValue;
         if (reading.Value is not { } value) return "—";
         // RAM et VRAM : "utilise / total" en Gio plutot qu'un chiffre brut en MiB sans repere.
         if (reading.Kind == Kind.Memory && reading.Maximum is { } total && total > 0 && Math.Abs(value - total) > 0.001)

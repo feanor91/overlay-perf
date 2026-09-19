@@ -13,7 +13,12 @@ public sealed record FpsStats(
     double? Low01Percent,
     int FrameCount,
     string? Application,
-    bool Stale);
+    bool Stale,
+    /// <summary>Trames affichees pour une trame reellement calculee par le jeu (DLSS/FSR/XeSS
+    /// Frame Generation) ; <c>null</c> si PresentMon ne rapporte pas le type de trame pour cette
+    /// session (colonne <c>FrameType</c> absente : jeu, pilote ou version de PresentMon trop
+    /// ancienne).</summary>
+    double? FrameGenerationMultiplier);
 
 /// <summary>
 /// Fenetre glissante d'intervalles entre trames, alimentee par plusieurs threads.
@@ -22,8 +27,13 @@ public sealed record FpsStats(
 /// </summary>
 public sealed class FrameTimeTracker
 {
+    /// <summary>Valeur de la colonne CSV <c>FrameType</c> pour une trame reellement calculee par
+    /// le jeu (voir PresentMon, <c>--track_frame_type</c>) : toute autre valeur non nulle est une
+    /// trame generee (Frame Generation).</summary>
+    private const string ApplicationFrameType = "Application";
+
     private readonly object _lock = new();
-    private readonly Queue<(double Arrival, double Ms)> _frames = new();
+    private readonly Queue<(double Arrival, double Ms, string? FrameType)> _frames = new();
     private readonly int _capacity;
     private readonly double _windowSeconds;
     private readonly double _staleAfter;
@@ -46,7 +56,7 @@ public sealed class FrameTimeTracker
 
     /// <summary>Enregistre la presentation d'une trame datee de <paramref name="timestamp"/> (secondes,
     /// base de temps quelconque mais croissante) ; l'ecart avec la precedente devient la duree de trame.</summary>
-    public void AddFrame(double? timestamp = null, string? application = null)
+    public void AddFrame(double? timestamp = null, string? application = null, string? frameType = null)
     {
         var arrival = _clock();
         var source = timestamp ?? arrival;
@@ -61,12 +71,12 @@ public sealed class FrameTimeTracker
             // Ecart nul ou negatif : trame dupliquee, ou horloge qui recule. On repart de
             // cette trame comme nouvelle reference sans rien enregistrer.
             if (deltaMs <= 0) return;
-            Record(arrival, deltaMs);
+            Record(arrival, deltaMs, frameType);
         }
     }
 
     /// <summary>Enregistre directement une duree de trame en millisecondes.</summary>
-    public void AddFrameTime(double frameTimeMs, string? application = null)
+    public void AddFrameTime(double frameTimeMs, string? application = null, string? frameType = null)
     {
         if (frameTimeMs <= 0 || !double.IsFinite(frameTimeMs)) return;
         var arrival = _clock();
@@ -74,16 +84,16 @@ public sealed class FrameTimeTracker
         {
             if (application is not null) _application = application;
             _lastArrival = arrival;
-            Record(arrival, frameTimeMs);
+            Record(arrival, frameTimeMs, frameType);
         }
     }
 
     /// <summary>Une trame de plus d'une seconde n'est pas une trame lente mais une coupure
     /// (alt-tab, chargement, jeu quitte) : la conserver fausserait durablement les centiles bas.</summary>
-    private void Record(double arrival, double frameTimeMs)
+    private void Record(double arrival, double frameTimeMs, string? frameType)
     {
         if (frameTimeMs > _maxFrameTimeMs) return;
-        _frames.Enqueue((arrival, frameTimeMs));
+        _frames.Enqueue((arrival, frameTimeMs, frameType));
         while (_frames.Count > _capacity) _frames.Dequeue();
     }
 
@@ -101,7 +111,7 @@ public sealed class FrameTimeTracker
     public FpsStats Stats()
     {
         var now = _clock();
-        List<double> recent;
+        List<(double Ms, string? FrameType)> recent;
         List<double> history;
         string? application;
         double? last;
@@ -109,17 +119,17 @@ public sealed class FrameTimeTracker
         {
             application = _application;
             last = _lastArrival;
-            recent = _frames.Where(f => now - f.Arrival <= _windowSeconds).Select(f => f.Ms).ToList();
+            recent = _frames.Where(f => now - f.Arrival <= _windowSeconds).Select(f => (f.Ms, f.FrameType)).ToList();
             history = _frames.Select(f => f.Ms).ToList();
         }
 
         var stale = last is null || now - last.Value > _staleAfter;
         if (stale || recent.Count == 0)
         {
-            return new FpsStats(null, null, null, null, history.Count, application, true);
+            return new FpsStats(null, null, null, null, history.Count, application, true, null);
         }
 
-        var meanFrameTime = recent.Average();
+        var meanFrameTime = recent.Select(f => f.Ms).Average();
         history.Sort();
         // Un "1 % low" est l'inverse du 99e centile de duree de trame : il decrit les
         // trames les plus lentes, celles que l'oeil percoit comme des saccades.
@@ -132,7 +142,20 @@ public sealed class FrameTimeTracker
             low01 is { } l01 ? Math.Round(l01, 1) : null,
             history.Count,
             application,
-            false);
+            false,
+            FrameGenerationMultiplier(recent));
+    }
+
+    /// <summary>Trames affichees pour une trame reellement calculee par le jeu, sur la fenetre
+    /// recente : <c>null</c> si aucune trame de cette fenetre ne porte de type (colonne CSV
+    /// <c>FrameType</c> absente cette session, cf. <see cref="ApplicationFrameType"/>).</summary>
+    private static double? FrameGenerationMultiplier(List<(double Ms, string? FrameType)> recent)
+    {
+        var typed = recent.Where(f => f.FrameType is not null).ToList();
+        if (typed.Count == 0) return null;
+        var applicationFrames = typed.Count(f => f.FrameType == ApplicationFrameType);
+        if (applicationFrames <= 0) return null;
+        return Math.Round((double)typed.Count / applicationFrames, 2);
     }
 
     /// <summary>Centile par interpolation lineaire sur une liste deja triee (<paramref name="fraction"/> dans [0, 1]).</summary>
@@ -166,6 +189,8 @@ public sealed class FpsBackend(FrameTimeTracker tracker, ILogger logger) : Senso
             new Reading { Key = "fps.frametime", Label = "Temps de trame", Value = stats.FrameTimeMs, Unit = "ms", Group = Group.Fps, Kind = Kind.Duration, Minimum = 0.0, Maximum = 50.0, Source = Name, Extra = extra },
             new Reading { Key = "fps.low1", Label = "1 % low", Value = stats.Low1Percent, Unit = "FPS", Group = Group.Fps, Kind = Kind.Fps, Minimum = 0.0, Source = Name, Extra = extra },
             new Reading { Key = "fps.low01", Label = "0,1 % low", Value = stats.Low01Percent, Unit = "FPS", Group = Group.Fps, Kind = Kind.Fps, Minimum = 0.0, Source = Name, Extra = extra },
+            new Reading { Key = "fps.application", Label = "Application", Text = stats.Application, Group = Group.Fps, Kind = Kind.Text, Source = Name },
+            new Reading { Key = "fps.framegen", Label = "Generation d'images", Value = stats.FrameGenerationMultiplier, Unit = "×", Group = Group.Fps, Kind = Kind.Multiplier, Minimum = 1.0, Source = Name, Extra = extra },
         ];
     }
 }

@@ -3,7 +3,7 @@
 ; Prerequis : "..\publish\OverlayPerf.exe" doit deja exister (dotnet publish -c Release -o publish).
 
 #define MyAppName "OverlayPerf"
-#define MyAppVersion "0.1.4"
+#define MyAppVersion "0.1.5"
 #define MyAppPublisher "feanor91"
 #define MyAppURL "https://github.com/feanor91/overlay-perf"
 #define MyAppExeName "OverlayPerf.exe"

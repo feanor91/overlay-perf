@@ -33,6 +33,11 @@ public sealed class FpsConfig
     public string Mode { get; set; } = "auto";
     public string PresentMonPath { get; set; } = "";
     public double WindowSeconds { get; set; } = 1.0;
+    /// <summary>Ajoute <c>--track_frame_type</c> a PresentMon pour distinguer les trames
+    /// calculees des trames generees (DLSS/FSR/XeSS Frame Generation) et publier un
+    /// multiplicateur. Option beta de PresentMon : desactivee automatiquement pour la session
+    /// si l'executable configure ne la reconnait pas.</summary>
+    public bool TrackFrameGeneration { get; set; }
 }
 
 public sealed class ServerConfig
@@ -80,6 +85,10 @@ public sealed class OverlayConfig
     public bool TrayIcon { get; set; } = true;
     public bool VisibleAtStart { get; set; } = true;
     public List<string> Metrics { get; set; } = [.. DefaultMetrics];
+    /// <summary>Nom de peripherique (<see cref="System.Windows.Forms.Screen.DeviceName"/>, ex.
+    /// <c>\\.\DISPLAY2</c>) de l'ecran cible ; vide = ecran principal, ou repli automatique dessus
+    /// si l'ecran configure a ete debranche.</summary>
+    public string Monitor { get; set; } = "";
 }
 
 public sealed class AppConfig
@@ -164,6 +173,7 @@ public sealed class AppConfig
             f.Mode = s.String("mode", f.Mode).Trim().ToLowerInvariant();
             f.PresentMonPath = s.String("presentmon_path", f.PresentMonPath);
             f.WindowSeconds = s.Double("window_seconds", f.WindowSeconds);
+            f.TrackFrameGeneration = s.Bool("track_frame_generation", f.TrackFrameGeneration);
             s.Ignore("mangohud_log_dir", "MangoHud est specifique a Linux");
         });
         Section("server", s =>
@@ -198,6 +208,7 @@ public sealed class AppConfig
             ov.TrayIcon = s.Bool("tray_icon", ov.TrayIcon);
             ov.VisibleAtStart = s.Bool("visible_at_start", ov.VisibleAtStart);
             ov.Metrics = s.StringList("metrics", ov.Metrics);
+            ov.Monitor = s.String("monitor", ov.Monitor);
         });
 
         foreach (var key in model.Keys)

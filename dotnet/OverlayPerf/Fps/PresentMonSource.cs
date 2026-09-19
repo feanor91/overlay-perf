@@ -51,13 +51,17 @@ public sealed class PresentMonSource : IDisposable
     private System.Threading.Timer? _foregroundTimer;
     private Process? _process;
     private volatile bool _retargeting;
+    /// <summary>Mutable : desactive automatiquement si PresentMon ne reconnait pas
+    /// <c>--track_frame_type</c> (option beta, absente des versions anterieures).</summary>
+    private bool _trackFrameType;
 
     /// <summary>Application actuellement ciblee via <c>--process_name</c> (<c>null</c> = aucune
     /// identifiee pour l'instant, repli sur la liste noire <see cref="_excludes"/>).</summary>
     private string? _target;
 
     public PresentMonSource(FrameTimeTracker tracker, ILogger log, string executable,
-        IReadOnlyList<string>? excludes = null, string? processFilter = null, Func<string?>? detectForeground = null)
+        IReadOnlyList<string>? excludes = null, string? processFilter = null, Func<string?>? detectForeground = null,
+        bool trackFrameGeneration = false)
     {
         _tracker = tracker;
         _log = log;
@@ -68,6 +72,7 @@ public sealed class PresentMonSource : IDisposable
         _fixedTarget = string.IsNullOrWhiteSpace(processFilter) ? null : processFilter.Trim();
         _target = _fixedTarget;
         _detectForeground = detectForeground ?? ForegroundProcess.Name;
+        _trackFrameType = trackFrameGeneration;
     }
 
     public string Executable { get; }
@@ -170,6 +175,18 @@ public sealed class PresentMonSource : IDisposable
             var errorLine = stderr.LastOrDefault(l => l.Contains("error", StringComparison.OrdinalIgnoreCase));
             var tail = errorLine ?? (stderr.Count == 0 ? "(aucune sortie d'erreur)" : string.Join(" | ", stderr.TakeLast(3)));
 
+            // --track_frame_type est une option beta absente des versions anterieures de
+            // PresentMon : une option qu'il ne reconnait pas ne doit pas casser tout le FPS,
+            // juste desactiver ce comptage precis (retente aussitot, sans le drapeau).
+            if (_trackFrameType && framesThisRun == 0 && stderr.Any(IsUnknownOptionError))
+            {
+                _log.LogWarning("PresentMon ne reconnait pas --track_frame_type (version trop ancienne ?) : "
+                                 + "multiplicateur de generation d'images desactive pour cette session. {Stderr}", tail);
+                _trackFrameType = false;
+                attempt = 0;
+                continue;
+            }
+
             // Refus deterministe : relancer ne changera rien, autant le dire tout de suite.
             if (framesThisRun == 0 && stderr.Any(IsPrivilegeError))
             {
@@ -226,6 +243,10 @@ public sealed class PresentMonSource : IDisposable
         var target = _target ?? throw new InvalidOperationException("RunOnce appele sans cible");
         psi.ArgumentList.Add("--process_name");
         psi.ArgumentList.Add(target);
+        if (_trackFrameType)
+        {
+            psi.ArgumentList.Add("--track_frame_type");
+        }
 
         var stderr = new List<string>();
         long frames = 0;
@@ -317,6 +338,12 @@ public sealed class PresentMonSource : IDisposable
         line.Contains("access denied", StringComparison.OrdinalIgnoreCase)
         || line.Contains("administrative privileges", StringComparison.OrdinalIgnoreCase)
         || line.Contains("elevated privilege", StringComparison.OrdinalIgnoreCase) && line.Contains("error", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsUnknownOptionError(string line) =>
+        line.Contains("unrecognized", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("unknown option", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("invalid option", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("not recognized", StringComparison.OrdinalIgnoreCase);
 
     private static string ExtractApp(PresentMonCsv parser, string line)
     {
